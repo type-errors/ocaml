@@ -1750,7 +1750,7 @@ struct
     val empty : t
     (** No variables are accessed in an expression; it might be a
         constant or a global identifier *)
-      
+
     val unguarded : t -> Ident.t list
     (** The list of identifiers that are used in an unguarded context *)
 
@@ -1785,14 +1785,14 @@ struct
         x y
 
     let single id access = M.add id access M.empty
-  
+
     let empty = M.empty
 
     let list_matching p t =
       let r = ref [] in
       M.iter (fun id v -> if p v then r := id :: !r) t;
       !r
-    
+
     let unguarded =
       list_matching (function Unguarded | Dereferenced -> true | _ -> false)
 
@@ -1808,7 +1808,7 @@ struct
     let empty = Ident.empty
 
     let join x y =
-      let r = 
+      let r =
       Ident.fold_all
         (fun id v tbl ->
            let v' = try Ident.find_same id tbl with Not_found -> Use.empty in
@@ -1912,7 +1912,7 @@ struct
   type sd = Static | Dynamic
 
   let rec classify_expression : Typedtree.expression -> sd =
-    fun exp -> match exp.exp_desc with 
+    fun exp -> match exp.exp_desc with
       | Texp_let (_, _, e)
       | Texp_letmodule (_, _, _, e)
       | Texp_sequence (_, e)
@@ -1971,7 +1971,7 @@ struct
                 (join
                    (inspect (expression env e1))
                    (inspect (expression env e2)))
-                (* The body is evaluated, but not used, and not available 
+                (* The body is evaluated, but not used, and not available
                    for inclusion in another value *)
                 (discard (expression env e3)))
 
@@ -2030,8 +2030,8 @@ struct
       | Texp_ifthenelse (cond, ifso, ifnot) ->
           Use.(join (inspect (expression env cond))
                   (join
-                     (expression env ifso)
-                     (option expression env ifnot)))
+                     (option expression env ifnot)
+                     (expression env ifso)))
       | Texp_setfield (e1, _, _, e2) ->
           Use.(join (inspect (expression env e1))
                 (inspect (expression env e2)))
@@ -2213,7 +2213,7 @@ struct
         else Use.discard ty (* as in 'let' *)
       in
       let vars = pattern_variables c_lhs in
-      let env = 
+      let env =
         List.fold_left
           (fun env id -> Ident.add id ty env)
           env
@@ -2226,7 +2226,7 @@ struct
     fun rec_flag env bindings ->
       match rec_flag with
       | Recursive ->
-          (* Approximation: 
+          (* Approximation:
                 let rec y =
                   let rec x1 = e1
                       and x2 = e2
@@ -2285,7 +2285,7 @@ struct
     let ty = expression (build_unguarded_env idlist) expr in
     match Use.unguarded ty, Use.dependent ty, classify_expression expr with
     | _ :: _, _, _ (* The expression inspects rec-bound variables *)
-    | _, _ :: _, Dynamic -> (* The expression depends on rec-bound variables 
+    | _, _ :: _, Dynamic -> (* The expression depends on rec-bound variables
                                and its size is unknown *)
         raise(Error(expr.exp_loc, env, Illegal_letrec_expr))
     | [], _, Static (* The expression has known size *)
@@ -3094,16 +3094,41 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
             exp_attributes = sexp.pexp_attributes;
             exp_env = env }
       | Some sifnot ->
-          let ifso = type_expect env sifso ty_expected in
-          let ifnot = type_expect env sifnot ty_expected in
+          (* TRUNG: change the order of finding if-then-else type here *)
           (* Keep sharing *)
-          unify_exp env ifnot ifso.exp_type;
-          re {
-            exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
-            exp_loc = loc; exp_extra = [];
-            exp_type = ifso.exp_type;
-            exp_attributes = sexp.pexp_attributes;
-            exp_env = env }
+          try
+            let ifnot = type_expect env sifnot ty_expected in
+            let ifso = type_expect env sifso ty_expected in
+            unify_exp env ifso ifnot.exp_type;
+            re {
+              exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
+              exp_loc = loc; exp_extra = [];
+              exp_type = ifso.exp_type;
+              exp_attributes = sexp.pexp_attributes;
+              exp_env = env }
+          with _ -> (
+              let _ = print_endline "ERROR" in
+              (* let ifnot = type_expect env sifnot ty_expected in
+               * let ifso = type_expect env sifso ty_expected in
+               * unify_exp env ifso ifnot.exp_type;
+               * re {
+               *   exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
+               *   exp_loc = loc; exp_extra = [];
+               *   exp_type = ifso.exp_type;
+               *   exp_attributes = sexp.pexp_attributes;
+               *   exp_env = env } *)
+              let ifso = type_expect env sifso ty_expected in
+              let ifnot = type_expect env sifnot ty_expected in
+              unify_exp env ifnot ifso.exp_type;
+              re {
+                exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
+                exp_loc = loc; exp_extra = [];
+                exp_type = ifso.exp_type;
+                exp_attributes = sexp.pexp_attributes;
+                exp_env = env }
+            )
+          (* unify_exp env ifso ifnot.exp_type; *)
+
       end
   | Pexp_sequence(sexp1, sexp2) ->
       let exp1 = type_statement env sexp1 in
@@ -4835,7 +4860,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
       l spat_sexp_list
   in
   if is_recursive then
-    List.iter 
+    List.iter
       (fun {vb_pat=pat} -> match pat.pat_desc with
            Tpat_var _ -> ()
          | Tpat_alias ({pat_desc=Tpat_any}, _, _) -> ()
@@ -4927,9 +4952,9 @@ let report_error env ppf = function
   | Expr_type_clash trace ->
       report_unification_error ppf env trace
         (function ppf ->
-           fprintf ppf "This expression has type")
+           fprintf ppf "This expression has 2 type")
         (function ppf ->
-           fprintf ppf "but an expression was expected of type")
+           fprintf ppf "but an expression was expected of 3 type")
   | Apply_non_function typ ->
       reset_and_mark_loops typ;
       begin match (repr typ).desc with
