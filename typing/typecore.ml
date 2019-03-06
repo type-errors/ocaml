@@ -359,15 +359,25 @@ let report_error env ppf = function
 let report_error env ppf err =
   wrap_printing_env env (fun () -> report_error env ppf err)
 
-let rec show_all_type_errors xs =
-  match xs with
-  | [] -> ()
-  | (`TypeOK _)::nxs -> show_all_type_errors nxs
-  | (`TypeError (loc, env, err))::nxs ->
-      let _ = Location.print_error err_formatter loc in
-      let _ = report_error env err_formatter err in
-      let _ = fprintf err_formatter "\n" in
-      show_all_type_errors nxs
+let show_all_type_errors errors =
+  let has_error errors = List.exists (function
+      | `TypeError _ -> true
+      | _ -> false) errors in
+  let rec show errors = match errors with
+    | [] -> ()
+    | (`TypeOK _)::errors -> show errors
+    | (`TypeError (loc, env, err))::errors ->
+        let _ = Location.print_error std_formatter loc in
+        let _ = report_error env std_formatter err in
+        let _ = print_string "\n" in
+        if has_error errors then (
+          print_string "\nDo you want to see the next type error? [y/n]: ";
+          let answer = String.trim (read_line ()) in
+          if String.compare answer "y" = 0 then
+            (print_endline "\nFound another type error:"; show errors)
+          else ())
+        else print_endline "\nNo more type errors!" in
+  show errors
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
 
