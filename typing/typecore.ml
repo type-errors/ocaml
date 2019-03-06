@@ -364,7 +364,6 @@ let rec show_all_type_errors xs =
   | [] -> ()
   | (`TypeOK _)::nxs -> show_all_type_errors nxs
   | (`TypeError (loc, env, err))::nxs ->
-      let _ = fprintf err_formatter "\n" in
       let _ = Location.print_error err_formatter loc in
       let _ = report_error env err_formatter err in
       let _ = fprintf err_formatter "\n" in
