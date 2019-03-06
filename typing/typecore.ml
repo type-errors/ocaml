@@ -371,10 +371,10 @@ let show_all_type_errors errors =
         let _ = report_error env std_formatter err in
         let _ = print_string "\n" in
         if has_error errors then (
-          print_string "\nDo you want to see the next type error? [y/n]: ";
+          print_string "\nThere is also another type error!";
+          print_string "\nDo you want to see it? [y/n]: ";
           let answer = String.trim (read_line ()) in
-          if String.compare answer "y" = 0 then
-            (print_endline "\nFound another type error:"; show errors)
+          if String.compare answer "y" = 0 then (print_endline ""; show errors)
           else ())
         else print_endline "\nNo more type errors!" in
   show errors
