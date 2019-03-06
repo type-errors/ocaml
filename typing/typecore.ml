@@ -367,7 +367,9 @@ let unify_exp_types loc env ty expected_ty =
     unify env ty expected_ty
   with
     Unify trace ->
-      raise(Error(loc, env, Expr_type_clash(trace)))
+      let _ = print_endline "Exception in UNIFY_EXP_TYPES" in
+      (* raise(Error(loc, env, Expr_type_clash(trace))) *)
+      raise(Error(loc, env, Expr_type_clash (trace)))
   | Tags(l1,l2) ->
       raise(Typetexp.Error(loc, env, Typetexp.Variant_tags (l1, l2)))
 
@@ -2365,6 +2367,7 @@ let rec type_approx env sexp =
       let ty = type_approx env e in
       let ty1 = approx_type env sty in
       begin try unify env ty ty1 with Unify trace ->
+        let _ = print_endline "Exception in TYPE_APPROX 1" in
         raise(Error(sexp.pexp_loc, env, Expr_type_clash trace))
       end;
       ty1
@@ -2377,6 +2380,7 @@ let rec type_approx env sexp =
       and ty1 = approx_ty_opt sty1
       and ty2 = approx_type env sty2 in
       begin try unify env ty ty1 with Unify trace ->
+        let _ = print_endline "Exception in TYPE_APPROX 2" in
         raise(Error(sexp.pexp_loc, env, Expr_type_clash trace))
       end;
       ty2
@@ -3096,39 +3100,26 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       | Some sifnot ->
           (* TRUNG: change the order of finding if-then-else type here *)
           (* Keep sharing *)
-          try
-            let ifnot = type_expect env sifnot ty_expected in
-            let ifso = type_expect env sifso ty_expected in
-            unify_exp env ifso ifnot.exp_type;
-            re {
-              exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
-              exp_loc = loc; exp_extra = [];
-              exp_type = ifso.exp_type;
-              exp_attributes = sexp.pexp_attributes;
-              exp_env = env }
-          with _ -> (
-              let _ = print_endline "ERROR" in
-              (* let ifnot = type_expect env sifnot ty_expected in
-               * let ifso = type_expect env sifso ty_expected in
-               * unify_exp env ifso ifnot.exp_type;
-               * re {
-               *   exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
-               *   exp_loc = loc; exp_extra = [];
-               *   exp_type = ifso.exp_type;
-               *   exp_attributes = sexp.pexp_attributes;
-               *   exp_env = env } *)
-              let ifso = type_expect env sifso ty_expected in
-              let ifnot = type_expect env sifnot ty_expected in
-              unify_exp env ifnot ifso.exp_type;
-              re {
-                exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
-                exp_loc = loc; exp_extra = [];
-                exp_type = ifso.exp_type;
-                exp_attributes = sexp.pexp_attributes;
-                exp_env = env }
-            )
-          (* unify_exp env ifso ifnot.exp_type; *)
-
+          let snap = snapshot () in
+          let ifso =
+            try `TypeOK (type_expect env sifso ty_expected)
+            with e -> `TypeError e in
+          let ifnot =
+            try `TypeOK (type_expect env sifnot ty_expected)
+            with e -> `TypeError e in
+          let res = match ifso, ifnot with
+            | `TypeOK ifso, `TypeOK ifnot ->
+                unify_exp env ifso ifnot.exp_type;
+                let _ = snap in
+                re {
+                  exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
+                  exp_loc = loc; exp_extra = [];
+                  exp_type = ifso.exp_type;
+                  exp_attributes = sexp.pexp_attributes;
+                  exp_env = env }
+            | _, `TypeError e -> raise e
+            | `TypeError e, _ -> raise e in
+          res
       end
   | Pexp_sequence(sexp1, sexp2) ->
       let exp1 = type_statement env sexp1 in
@@ -3210,7 +3201,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
                 let tv = newvar () in
                 let gen = generalizable tv.level arg.exp_type in
                 (try unify_var env tv arg.exp_type with Unify trace ->
-                  raise(Error(arg.exp_loc, env, Expr_type_clash trace)));
+                   let _ = print_endline "Exception in TYPE_EXPECT" in
+                   raise(Error(arg.exp_loc, env, Expr_type_clash trace)));
                 gen
               end else true
             in
