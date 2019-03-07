@@ -371,12 +371,11 @@ let show_all_type_errors errors =
         let _ = report_error env std_formatter err in
         let _ = print_string "\n" in
         if has_error errors then (
-          print_string "\nThere is also another type error!";
-          print_string "\nDo you want to see it? [y/n]: ";
+          print_string "\nAre you satisfying with this type error [y/n]?";
+          print_string "\nType 'y' to quit, or 'n' to see other type error: ";
           let answer = String.trim (read_line ()) in
-          if String.compare answer "y" = 0 then (print_endline ""; show errors)
-          else ())
-        else print_endline "\nNo more type errors!" in
+          if String.compare answer "n" = 0 then (print_endline ""; show errors)
+          else ()) in
   show errors
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
@@ -3391,10 +3390,14 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           let snap = snapshot () in
           let r1 =
             try `TypeOK (type_expect env sifso ty_expected)
-            with Error (loc, env, error) -> `TypeError (loc, env, error) in
+            with Error (loc, env, error) ->
+              backtrack snap;
+              `TypeError (loc, env, error) in
           let r2 =
             try `TypeOK (type_expect env sifnot ty_expected)
-            with Error (loc, env, error) -> `TypeError (loc, env, error) in
+            with Error (loc, env, error) ->
+              backtrack snap;
+              `TypeError (loc, env, error) in
           let res = match r1, r2 with
             | `TypeOK ifso, `TypeOK ifnot ->
                 unify_exp env ifso ifnot.exp_type;
@@ -3407,7 +3410,14 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
                   exp_env = env }
             | _ ->
                 let _ = show_all_type_errors [r1; r2] in
-                raise Location.Already_displayed_error in
+                backtrack snap;
+                let unk_type = {desc = Tnil; level = -1; id = -1} in
+                re {
+                  exp_desc = Texp_unreachable;
+                  exp_loc = loc; exp_extra = [];
+                  exp_type = unk_type;
+                  exp_attributes = sexp.pexp_attributes;
+                  exp_env = env } in
           res
       end
   | Pexp_sequence(sexp1, sexp2) ->
