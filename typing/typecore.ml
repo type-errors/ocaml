@@ -87,6 +87,7 @@ exception Error_forward of Location.error
 (* TRUNG: function to show type errors *)
 
 let already_show_some_type_errors = ref false
+let stop_show_type_errors = ref false
 
 let label_of_kind kind =
   if kind = "record" then "field" else "constructor"
@@ -367,17 +368,19 @@ let show_all_type_errors errors =
     | (`TypeOK _)::errors -> show errors
     | (`TypeIgnored)::errors -> show errors
     | (`TypeError (loc, env, err))::errors ->
-        let _ = if !already_show_some_type_errors then (
-          print_string "\nAre you satisfying with the above type error [y/n]?";
-          print_string "\nType 'y' to quit, or 'n' to see other type error: ";
+        if !already_show_some_type_errors && not !stop_show_type_errors then (
+          print_string "\nDo you want to see other type error? [y/n]: ";
           let answer = String.trim (read_line ()) in
-          if String.compare answer "n" = 0 then (print_endline ""; show errors)
-          else ()) in
-        let _ = Location.print_error std_formatter loc in
-        let _ = report_error env std_formatter err in
-        let _ = already_show_some_type_errors := true in
-        let _ = print_string "\n" in
-        show errors in
+          if String.compare answer "y" = 0 then
+            let _ = print_endline "" in
+            show errors
+          else stop_show_type_errors := true);
+        if not !stop_show_type_errors then (
+          let _ = Location.print_error std_formatter loc in
+          let _ = report_error env std_formatter err in
+          let _ = already_show_some_type_errors := true in
+          let _ = print_string "\n" in
+          show errors) in
   show errors
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
