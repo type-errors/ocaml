@@ -363,8 +363,11 @@ let report_error env ppf err =
   wrap_printing_env env (fun () -> report_error env ppf err)
 
 let capture f =
-  try `TypeOK (f ())
-  with Error (loc, env, error) -> `TypeError (loc, env, error)
+  try
+    `TypeOK (f ())
+  with
+  |Error (loc, env, error) -> `TypeError (loc, env, error)
+  | Location.Already_displayed_error ->`TypeIgnored
 
 let extract_typed_exps rs =
   List.fold_left (fun acc r -> match r with
@@ -380,9 +383,7 @@ let show_all_type_errors errors =
         if !already_show_some_type_errors && not !stop_show_type_errors then (
           print_string "\nDo you want to see other type error? [y/n]: ";
           let answer = String.trim (read_line ()) in
-          if String.compare answer "y" = 0 then
-            let _ = print_endline "" in
-            show errors
+          if String.compare answer "y" = 0 then print_endline ""
           else stop_show_type_errors := true);
         if not !stop_show_type_errors then (
           let _ = Location.print_error std_formatter loc in
@@ -3407,31 +3408,10 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           (* TRUNG: change the order of finding if-then-else type here *)
           (* Keep sharing *)
           let snap = snapshot () in
-<<<<<<< HEAD
           let r1 = capture (fun () -> type_expect env sifso ty_expected) in
           let r2 = capture (fun () -> type_expect env sifnot ty_expected) in
           let res = match extract_typed_exps [r1; r2] with
             | [ifso; ifnot] ->
-=======
-          let r1 =
-            try `TypeOK (type_expect env sifso ty_expected)
-            with
-            | Error (loc, env, error) ->
-                backtrack snap;
-                `TypeError (loc, env, error)
-            | Location.Already_displayed_error ->
-                `TypeIgnored in
-          let r2 =
-            try `TypeOK (type_expect env sifnot ty_expected)
-            with
-            | Error (loc, env, error) ->
-                backtrack snap;
-                `TypeError (loc, env, error)
-            | Location.Already_displayed_error ->
-                `TypeIgnored in
-          let res = match r1, r2 with
-            | `TypeOK ifso, `TypeOK ifnot ->
->>>>>>> 5ffcf31789cdd2854395609d398400237a2fb632
                 unify_exp env ifso ifnot.exp_type;
                 let _ = snap in
                 re {
