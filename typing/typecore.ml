@@ -359,6 +359,15 @@ let report_error env ppf = function
 let report_error env ppf err =
   wrap_printing_env env (fun () -> report_error env ppf err)
 
+let capture f =
+  try `TypeOK (f ())
+  with Error (loc, env, error) -> `TypeError (loc, env, error)
+
+let extract_typed_exps rs =
+  List.fold_left (fun acc r -> match r with
+      | `TypeOK e -> acc @ [e]
+      | _ -> acc) [] rs
+
 let show_all_type_errors errors =
   let has_error errors = List.exists (function
       | `TypeError _ -> true
@@ -378,6 +387,7 @@ let show_all_type_errors errors =
           else ())
         else print_endline "\nNo more type errors!" in
   show errors
+
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
 
@@ -3155,16 +3165,20 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let subtypes = List.map (fun _ -> newgenvar ()) sexpl in
       let to_unify = newgenty (Ttuple subtypes) in
       unify_exp_types loc env to_unify ty_expected;
-      let expl =
-        List.map2 (fun body ty -> type_expect env body ty) sexpl subtypes
-      in
-      re {
-        exp_desc = Texp_tuple expl;
-        exp_loc = loc; exp_extra = [];
-        (* Keep sharing *)
-        exp_type = newty (Ttuple (List.map (fun e -> e.exp_type) expl));
-        exp_attributes = sexp.pexp_attributes;
-        exp_env = env }
+      let rs = List.map2 (fun body ty ->
+          capture (fun () -> type_expect env body ty)) sexpl subtypes in
+      let expl = extract_typed_exps rs in
+      if (List.length rs = List.length expl) then
+        re {
+          exp_desc = Texp_tuple expl;
+          exp_loc = loc; exp_extra = [];
+          (* Keep sharing *)
+          exp_type = newty (Ttuple (List.map (fun e -> e.exp_type) expl));
+          exp_attributes = sexp.pexp_attributes;
+          exp_env = env }
+      else
+        let _ = show_all_type_errors rs in
+        raise Location.Already_displayed_error
   | Pexp_construct(lid, sarg) ->
       type_construct env loc lid sarg ty_expected sexp.pexp_attributes
   | Pexp_variant(l, sarg) ->
@@ -3389,14 +3403,10 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           (* TRUNG: change the order of finding if-then-else type here *)
           (* Keep sharing *)
           let snap = snapshot () in
-          let r1 =
-            try `TypeOK (type_expect env sifso ty_expected)
-            with Error (loc, env, error) -> `TypeError (loc, env, error) in
-          let r2 =
-            try `TypeOK (type_expect env sifnot ty_expected)
-            with Error (loc, env, error) -> `TypeError (loc, env, error) in
-          let res = match r1, r2 with
-            | `TypeOK ifso, `TypeOK ifnot ->
+          let r1 = capture (fun () -> type_expect env sifso ty_expected) in
+          let r2 = capture (fun () -> type_expect env sifnot ty_expected) in
+          let res = match extract_typed_exps [r1; r2] with
+            | [ifso; ifnot] ->
                 unify_exp env ifso ifnot.exp_type;
                 let _ = snap in
                 re {
