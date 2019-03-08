@@ -362,14 +362,15 @@ let report_error env ppf = function
 let report_error env ppf err =
   wrap_printing_env env (fun () -> report_error env ppf err)
 
+
 let capture f =
   try
     `TypeOK (f ())
   with
-  |Error (loc, env, error) -> `TypeError (loc, env, error)
+  | Error (loc, env, error) -> `TypeError (loc, env, error)
   | Location.Already_displayed_error ->`TypeIgnored
 
-let extract_typed_exps rs =
+let extract_typed_exprs rs =
   List.fold_left (fun acc r -> match r with
       | `TypeOK e -> acc @ [e]
       | _ -> acc) [] rs
@@ -3172,7 +3173,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       unify_exp_types loc env to_unify ty_expected;
       let rs = List.map2 (fun body ty ->
           capture (fun () -> type_expect env body ty)) sexpl subtypes in
-      let expl = extract_typed_exps rs in
+      let expl = extract_typed_exprs rs in
       if (List.length rs = List.length expl) then
         re {
           exp_desc = Texp_tuple expl;
@@ -3405,12 +3406,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
             exp_attributes = sexp.pexp_attributes;
             exp_env = env }
       | Some sifnot ->
-          (* TRUNG: change the order of finding if-then-else type here *)
           (* Keep sharing *)
           let snap = snapshot () in
           let r1 = capture (fun () -> type_expect env sifso ty_expected) in
           let r2 = capture (fun () -> type_expect env sifnot ty_expected) in
-          let res = match extract_typed_exps [r1; r2] with
+          let res = match extract_typed_exprs [r1; r2] with
             | [ifso; ifnot] ->
                 unify_exp env ifso ifnot.exp_type;
                 let _ = snap in
