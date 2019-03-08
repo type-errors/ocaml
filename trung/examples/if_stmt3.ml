@@ -5,5 +5,6 @@ let foo a b c =
   if (x > z) then
     let b = c > 3 in
     if b then b + 2
-    else a > ""
+    else if b then a > ""
+    else a + ""
   else y + x

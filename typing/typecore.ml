@@ -86,6 +86,9 @@ exception Error_forward of Location.error
 
 (* TRUNG: function to show type errors *)
 
+let already_show_some_type_errors = ref false
+let stop_show_type_errors = ref false
+
 let label_of_kind kind =
   if kind = "record" then "field" else "constructor"
 
@@ -369,23 +372,24 @@ let extract_typed_exps rs =
       | _ -> acc) [] rs
 
 let show_all_type_errors errors =
-  let has_error errors = List.exists (function
-      | `TypeError _ -> true
-      | _ -> false) errors in
   let rec show errors = match errors with
     | [] -> ()
     | (`TypeOK _)::errors -> show errors
+    | (`TypeIgnored)::errors -> show errors
     | (`TypeError (loc, env, err))::errors ->
-        let _ = Location.print_error std_formatter loc in
-        let _ = report_error env std_formatter err in
-        let _ = print_string "\n" in
-        if has_error errors then (
-          print_string "\nThere is also another type error!";
-          print_string "\nDo you want to see it? [y/n]: ";
+        if !already_show_some_type_errors && not !stop_show_type_errors then (
+          print_string "\nDo you want to see other type error? [y/n]: ";
           let answer = String.trim (read_line ()) in
-          if String.compare answer "y" = 0 then (print_endline ""; show errors)
-          else ())
-        else print_endline "\nNo more type errors!" in
+          if String.compare answer "y" = 0 then
+            let _ = print_endline "" in
+            show errors
+          else stop_show_type_errors := true);
+        if not !stop_show_type_errors then (
+          let _ = Location.print_error std_formatter loc in
+          let _ = report_error env std_formatter err in
+          let _ = already_show_some_type_errors := true in
+          let _ = print_string "\n" in
+          show errors) in
   show errors
 
 
@@ -3403,10 +3407,31 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           (* TRUNG: change the order of finding if-then-else type here *)
           (* Keep sharing *)
           let snap = snapshot () in
+<<<<<<< HEAD
           let r1 = capture (fun () -> type_expect env sifso ty_expected) in
           let r2 = capture (fun () -> type_expect env sifnot ty_expected) in
           let res = match extract_typed_exps [r1; r2] with
             | [ifso; ifnot] ->
+=======
+          let r1 =
+            try `TypeOK (type_expect env sifso ty_expected)
+            with
+            | Error (loc, env, error) ->
+                backtrack snap;
+                `TypeError (loc, env, error)
+            | Location.Already_displayed_error ->
+                `TypeIgnored in
+          let r2 =
+            try `TypeOK (type_expect env sifnot ty_expected)
+            with
+            | Error (loc, env, error) ->
+                backtrack snap;
+                `TypeError (loc, env, error)
+            | Location.Already_displayed_error ->
+                `TypeIgnored in
+          let res = match r1, r2 with
+            | `TypeOK ifso, `TypeOK ifnot ->
+>>>>>>> 5ffcf31789cdd2854395609d398400237a2fb632
                 unify_exp env ifso ifnot.exp_type;
                 let _ = snap in
                 re {
