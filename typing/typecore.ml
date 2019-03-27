@@ -363,17 +363,12 @@ let report_error env ppf err =
   wrap_printing_env env (fun () -> report_error env ppf err)
 
 
-let capture f =
+let capture_type_error f =
   try
     `TypeOK (f ())
   with
   | Error (loc, env, error) -> `TypeError (loc, env, error)
   | Location.Already_displayed_error ->`TypeIgnored
-
-let extract_typed_exprs rs =
-  List.fold_left (fun acc r -> match r with
-      | `TypeOK e -> acc @ [e]
-      | _ -> acc) [] rs
 
 let show_all_type_errors errors =
   let rec show errors = match errors with
@@ -392,8 +387,13 @@ let show_all_type_errors errors =
           let _ = already_show_some_type_errors := true in
           let _ = print_string "\n" in
           show errors) in
-  show errors
+  let _ = show errors in
+  raise Location.Already_displayed_error
 
+let extract_typed_exprs rs =
+  List.fold_left (fun acc r -> match r with
+      | `TypeOK e -> acc @ [e]
+      | _ -> acc) [] rs
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
 
@@ -2917,7 +2917,12 @@ and type_expect ?in_function ?recarg env sexp ty_expected =
   let exp =
     Builtin_attributes.warning_scope sexp.pexp_attributes
       (fun () ->
-         type_expect_ ?in_function ?recarg env sexp ty_expected
+         (* let r = capture_type_error (fun () -> *)
+             type_expect_ ?in_function ?recarg env sexp ty_expected
+           (* ) in
+          * match extract_typed_exprs [r] with
+          * | [e] -> e
+          * | _ -> show_all_type_errors [r] *)
       )
   in
   Cmt_format.set_saved_types
@@ -3035,6 +3040,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
          pexp_desc = Pexp_match (sval, [Ast_helper.Exp.case spat sbody])}
         ty_expected
   | Pexp_let(rec_flag, spat_sexp_list, sbody) ->
+      (* TRUNG: pexp_let *)
       let scp =
         match sexp.pexp_attributes, rec_flag with
         | [{txt="#default"},_], _ -> None
@@ -3043,18 +3049,20 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       in
       let (pat_exp_list, new_env, unpacks) =
         type_let env rec_flag spat_sexp_list scp true in
-      let body =
-        type_expect new_env (wrap_unpacks sbody unpacks) ty_expected in
-      let () =
-        if rec_flag = Recursive then
-          check_recursive_bindings env pat_exp_list
-      in
-      re {
-        exp_desc = Texp_let(rec_flag, pat_exp_list, body);
-        exp_loc = loc; exp_extra = [];
-        exp_type = body.exp_type;
-        exp_attributes = sexp.pexp_attributes;
-        exp_env = env }
+      let rbody = capture_type_error (fun () ->
+          type_expect new_env (wrap_unpacks sbody unpacks) ty_expected) in
+      let res = match extract_typed_exprs [rbody] with
+        | [body] ->
+            let () = if rec_flag = Recursive then
+                check_recursive_bindings env pat_exp_list in
+            re {
+              exp_desc = Texp_let(rec_flag, pat_exp_list, body);
+              exp_loc = loc; exp_extra = [];
+              exp_type = body.exp_type;
+              exp_attributes = sexp.pexp_attributes;
+              exp_env = env }
+        | _ -> show_all_type_errors [rbody] in
+      res
   | Pexp_fun (l, Some default, spat, sbody) ->
       assert(is_optional l); (* default allowed only with optional argument *)
       let open Ast_helper in
@@ -3171,10 +3179,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let subtypes = List.map (fun _ -> newgenvar ()) sexpl in
       let to_unify = newgenty (Ttuple subtypes) in
       unify_exp_types loc env to_unify ty_expected;
-      let rs = List.map2 (fun body ty ->
-          capture (fun () -> type_expect env body ty)) sexpl subtypes in
-      let expl = extract_typed_exprs rs in
-      if (List.length rs = List.length expl) then
+      let rexpls = List.map2 (fun body ty ->
+          capture_type_error (fun () ->
+              type_expect env body ty)) sexpl subtypes in
+      let expl = extract_typed_exprs rexpls in
+      if (List.length rexpls = List.length expl) then
         re {
           exp_desc = Texp_tuple expl;
           exp_loc = loc; exp_extra = [];
@@ -3182,9 +3191,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           exp_type = newty (Ttuple (List.map (fun e -> e.exp_type) expl));
           exp_attributes = sexp.pexp_attributes;
           exp_env = env }
-      else
-        let _ = show_all_type_errors rs in
-        raise Location.Already_displayed_error
+      else show_all_type_errors rexpls
   | Pexp_construct(lid, sarg) ->
       type_construct env loc lid sarg ty_expected sexp.pexp_attributes
   | Pexp_variant(l, sarg) ->
@@ -3408,9 +3415,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       | Some sifnot ->
           (* Keep sharing *)
           let snap = snapshot () in
-          let r1 = capture (fun () -> type_expect env sifso ty_expected) in
-          let r2 = capture (fun () -> type_expect env sifnot ty_expected) in
-          let res = match extract_typed_exprs [r1; r2] with
+          let rifso = capture_type_error (fun () ->
+              type_expect env sifso ty_expected) in
+          let rifnot = capture_type_error (fun () ->
+              type_expect env sifnot ty_expected) in
+          let res = match extract_typed_exprs [rifso; rifnot] with
             | [ifso; ifnot] ->
                 unify_exp env ifso ifnot.exp_type;
                 let _ = snap in
@@ -3420,9 +3429,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
                   exp_type = ifso.exp_type;
                   exp_attributes = sexp.pexp_attributes;
                   exp_env = env }
-            | _ ->
-                let _ = show_all_type_errors [r1; r2] in
-                raise Location.Already_displayed_error in
+            | _ -> show_all_type_errors [rifso; rifnot] in
           res
       end
   | Pexp_sequence(sexp1, sexp2) ->
@@ -5090,32 +5097,35 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
       attrs_list
       pat_list
   in
-  let exp_list =
-    List.map2
-      (fun {pvb_expr=sexp; pvb_attributes; _} (pat, slot) ->
-        let sexp =
-          if rec_flag = Recursive then wrap_unpacks sexp unpacks else sexp in
-        if is_recursive then current_slot := slot;
-        match pat.pat_type.desc with
-        | Tpoly (ty, tl) ->
-            begin_def ();
-            if !Clflags.principal then begin_def ();
-            let vars, ty' = instance_poly ~keep_names:true true tl ty in
-            if !Clflags.principal then begin
-              end_def ();
-              generalize_structure ty'
-            end;
-            let exp =
-              Builtin_attributes.warning_scope pvb_attributes
-                  (fun () -> type_expect exp_env sexp ty')
-            in
-            end_def ();
-            check_univars env true "definition" exp pat.pat_type vars;
-            {exp with exp_type = instance env exp.exp_type}
-        | _ ->
-            Builtin_attributes.warning_scope pvb_attributes (fun () ->
-              type_expect exp_env sexp pat.pat_type))
+  let rexp_list =
+    List.map2 (fun {pvb_expr=sexp; pvb_attributes; _} (pat, slot) ->
+        capture_type_error (fun () ->
+            let sexp =
+              if rec_flag = Recursive then wrap_unpacks sexp unpacks else sexp in
+            if is_recursive then current_slot := slot;
+            match pat.pat_type.desc with
+            | Tpoly (ty, tl) ->
+                begin_def ();
+                if !Clflags.principal then begin_def ();
+                let vars, ty' = instance_poly ~keep_names:true true tl ty in
+                if !Clflags.principal then begin
+                  end_def ();
+                  generalize_structure ty'
+                end;
+                let exp =
+                  Builtin_attributes.warning_scope pvb_attributes
+                    (fun () -> type_expect exp_env sexp ty')
+                in
+                end_def ();
+                check_univars env true "definition" exp pat.pat_type vars;
+                {exp with exp_type = instance env exp.exp_type}
+            | _ ->
+                Builtin_attributes.warning_scope pvb_attributes (fun () ->
+                    type_expect exp_env sexp pat.pat_type)))
       spat_sexp_list pat_slot_list in
+  let exp_list = extract_typed_exprs rexp_list in
+  let _ = if List.length exp_list != List.length rexp_list then
+      show_all_type_errors rexp_list in
   current_slot := None;
   if is_recursive && not !rec_needed
   && Warnings.is_active Warnings.Unused_rec_flag then begin
