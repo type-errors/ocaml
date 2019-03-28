@@ -2916,14 +2916,7 @@ and type_expect ?in_function ?recarg env sexp ty_expected =
   let previous_saved_types = Cmt_format.get_saved_types () in
   let exp =
     Builtin_attributes.warning_scope sexp.pexp_attributes
-      (fun () ->
-         (* let r = capture_type_error (fun () -> *)
-             type_expect_ ?in_function ?recarg env sexp ty_expected
-           (* ) in
-          * match extract_typed_exprs [r] with
-          * | [e] -> e
-          * | _ -> show_all_type_errors [r] *)
-      )
+      (fun () -> type_expect_ ?in_function ?recarg env sexp ty_expected)
   in
   Cmt_format.set_saved_types
     (Cmt_format.Partial_expression exp :: previous_saved_types);
