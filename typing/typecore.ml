@@ -89,6 +89,9 @@ exception Error_forward of Location.error
 let already_show_some_type_errors = ref false
 let stop_show_type_errors = ref false
 
+let already_reported_some_errors () =
+  !already_show_some_type_errors
+
 let label_of_kind kind =
   if kind = "record" then "field" else "constructor"
 
@@ -392,14 +395,16 @@ let show_all_type_errors errors =
           else stop_show_type_errors := true);
         if not !stop_show_type_errors then (
           let _ = Location.print_error std_formatter loc in
-          let _ = report_error env std_formatter err in
+          let _ = match err with
+            | Expr_type_clash _ -> report_error env std_formatter err
+            | _ -> () in
           let _ = already_show_some_type_errors := true in
           let _ = print_string "\n" in
           show errors) in
   (* show errors *)
+  let _ = show errors in
   if has_typed_error_exprs errors then
-    let _ = show errors in
-    raise Location.Already_displayed_error
+    raise Location.Already_displayed_error 
   else ()
 
 let mk_ill_typed_exp env loc =
@@ -2941,8 +2946,6 @@ let rec type_exp ?recarg env sexp =
 
 and type_expect ?in_function ?recarg env sexp ty_expected =
   let previous_saved_types = Cmt_format.get_saved_types () in
-  let _ = if ty_expected.desc = Tnil then
-      raise Location.Already_displayed_error in
   let exp =
     Builtin_attributes.warning_scope sexp.pexp_attributes
       (fun () -> type_expect_ ?in_function ?recarg env sexp ty_expected)
