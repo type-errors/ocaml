@@ -368,14 +368,14 @@ let report_error env ppf err =
 type type_result =
   | TypeOK of expression
   | TypeError of (Location.t * Env.t * error)
-  | TypeIgnored 
+  | TypeIgnored
 
 let capture_type_error f =
   try
     TypeOK (f ())
   with
   | Error (loc, env, error) -> TypeError (loc, env, error)
-  | Location.Already_displayed_error -> TypeIgnored 
+  | Location.Already_displayed_error -> TypeIgnored
 
 let has_typed_error_exprs rs =
   List.exists (fun r -> match r with
@@ -404,7 +404,7 @@ let show_all_type_errors errors =
   (* show errors *)
   let _ = show errors in
   if has_typed_error_exprs errors then
-    raise Location.Already_displayed_error 
+    raise Location.Already_displayed_error
   else ()
 
 let mk_ill_typed_exp env loc =
@@ -3065,7 +3065,6 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
          pexp_desc = Pexp_match (sval, [Ast_helper.Exp.case spat sbody])}
         ty_expected
   | Pexp_let(rec_flag, spat_sexp_list, sbody) ->
-      (* TRUNG: pexp_let *)
       let scp =
         match sexp.pexp_attributes, rec_flag with
         | [{txt="#default"},_], _ -> None
