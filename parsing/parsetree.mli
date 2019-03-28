@@ -354,6 +354,7 @@ and expression_desc =
         (* [%id] *)
   | Pexp_unreachable
         (* . *)
+  | Pexp_nil
 
 and case =   (* (P -> E) or (P when E0 -> E) *)
     {

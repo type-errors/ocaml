@@ -471,6 +471,7 @@ let expression sub exp =
                         PStr [ Str.eval ~loc
                                  (Exp.construct ~loc (map_loc sub lid) None)
                              ])
+    | Texp_nil -> Pexp_nil
   in
   List.fold_right (exp_extra sub) exp.exp_extra
     (Exp.mk ~loc ~attrs desc)

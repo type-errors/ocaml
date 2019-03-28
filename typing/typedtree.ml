@@ -114,6 +114,7 @@ and expression_desc =
   | Texp_pack of module_expr
   | Texp_unreachable
   | Texp_extension_constructor of Longident.t loc * Path.t
+  | Texp_nil
 
 and meth =
     Tmeth_name of string
@@ -617,3 +618,5 @@ let rec alpha_pat env p = match p.pat_desc with
 
 let mkloc = Location.mkloc
 let mknoloc = Location.mknoloc
+
+

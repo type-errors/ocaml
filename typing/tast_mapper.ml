@@ -349,6 +349,7 @@ let expr sub x =
         Texp_unreachable
     | Texp_extension_constructor _ as e ->
         e
+    | Texp_nil -> Texp_nil
   in
   {x with exp_extra; exp_desc; exp_env}
 

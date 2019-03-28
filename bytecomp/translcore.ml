@@ -1059,6 +1059,8 @@ and transl_exp0 e =
          }
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))
+  | Texp_nil ->
+      raise Location.Already_displayed_error
 
 and transl_list expr_list =
   List.map transl_exp expr_list
