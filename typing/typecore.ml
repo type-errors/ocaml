@@ -3395,34 +3395,37 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
   | Pexp_ifthenelse(scond, sifso, sifnot) ->
-      let cond = type_expect env scond Predef.type_bool in
+      let rcond = capture_type_error (fun () ->
+          type_expect env scond Predef.type_bool) in
       begin match sifnot with
         None ->
-          let ifso = type_expect env sifso Predef.type_unit in
-          rue {
-            exp_desc = Texp_ifthenelse(cond, ifso, None);
-            exp_loc = loc; exp_extra = [];
-            exp_type = ifso.exp_type;
-            exp_attributes = sexp.pexp_attributes;
-            exp_env = env }
+          let rifso = capture_type_error (fun () ->
+              type_expect env sifso Predef.type_unit) in
+          let res = match extract_typed_exprs [rcond; rifso] with
+            | [cond; ifso] ->
+                rue {
+                  exp_desc = Texp_ifthenelse(cond, ifso, None);
+                  exp_loc = loc; exp_extra = [];
+                  exp_type = ifso.exp_type;
+                  exp_attributes = sexp.pexp_attributes;
+                  exp_env = env }
+            | _ -> show_all_type_errors [rcond; rifso] in
+          res
       | Some sifnot ->
-          (* Keep sharing *)
-          let snap = snapshot () in
           let rifso = capture_type_error (fun () ->
               type_expect env sifso ty_expected) in
           let rifnot = capture_type_error (fun () ->
               type_expect env sifnot ty_expected) in
-          let res = match extract_typed_exprs [rifso; rifnot] with
-            | [ifso; ifnot] ->
+          let res = match extract_typed_exprs [rcond; rifso; rifnot] with
+            | [cond; ifso; ifnot] ->
                 unify_exp env ifso ifnot.exp_type;
-                let _ = snap in
                 re {
                   exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
                   exp_loc = loc; exp_extra = [];
                   exp_type = ifso.exp_type;
                   exp_attributes = sexp.pexp_attributes;
                   exp_env = env }
-            | _ -> show_all_type_errors [rifso; rifnot] in
+            | _ -> show_all_type_errors [rcond; rifso; rifnot] in
           res
       end
   | Pexp_sequence(sexp1, sexp2) ->
