@@ -2036,5 +2036,4 @@ let () =
       | Error_forward err ->
           Some err
       | _ ->
-          None
-    )
+          None)
