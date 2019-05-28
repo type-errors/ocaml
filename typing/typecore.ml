@@ -377,10 +377,10 @@ let capture_type_error f =
   | Error (loc, env, error) -> TypeError (loc, env, error)
   | Location.Already_displayed_error -> TypeIgnored
 
-let has_typed_error_exprs rs =
-  List.exists (fun r -> match r with
-      | TypeError _ -> true
-      | _ -> false) rs
+(* let has_typed_error_exprs rs =
+ *   List.exists (fun r -> match r with
+ *       | TypeError _ -> true
+ *       | _ -> false) rs *)
 
 let show_all_type_errors errors =
   let rec show errors = match errors with
@@ -403,9 +403,10 @@ let show_all_type_errors errors =
           show errors) in
   (* show errors *)
   let _ = show errors in
-  if has_typed_error_exprs errors then
-    raise Location.Already_displayed_error
-  else ()
+  ()
+  (* if has_typed_error_exprs errors then
+   *   raise Location.Already_displayed_error
+   * else () *)
 
 let mk_ill_typed_exp env loc =
   let typ = {desc = Tnil; level = 0; id = 0} in
@@ -3073,12 +3074,14 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       in
       let (pat_exp_list, new_env, unpacks, rexps) =
         type_let env rec_flag spat_sexp_list scp true in
+      let _ = show_all_type_errors (rexps) in
       let rbody = capture_type_error (fun () ->
           type_expect new_env (wrap_unpacks sbody unpacks) ty_expected) in
+      let _ = show_all_type_errors [rbody] in
       let body = extract_typed_expr rbody in
       let () = if rec_flag = Recursive then
           check_recursive_bindings env pat_exp_list in
-      let _ = show_all_type_errors (rexps @ [rbody]) in
+      (* let _ = show_all_type_errors (rexps @ [rbody]) in *)
       re {
         exp_desc = Texp_let(rec_flag, pat_exp_list, body);
         exp_loc = loc; exp_extra = [];
