@@ -381,13 +381,13 @@ let capture_type_error f =
   | Error (loc, env, error) -> TypeError (loc, env, error)
   (* | Location.Already_displayed_error -> TypeIgnored *)
   
-let has_typed_error_exprs aexpl =
-  let rec has_error aexpl = match aexpl with
-    | [] -> false
-    | (TypeError _)::_ -> true
-    | _::aexpl -> has_error aexpl in
-    (* | (TypeIgnored)::_ -> true *)
-  has_error aexpl
+(* let has_typed_error_exprs aexpl =
+ *   let rec has_error aexpl = match aexpl with
+ *     | [] -> false
+ *     | (TypeError _)::_ -> true
+ *     | _::aexpl -> has_error aexpl in
+ *     (\* | (TypeIgnored)::_ -> true *\)
+ *   has_error aexpl *)
 
 let show_all_type_errors aexpl =
   let rec show aexpl = match aexpl with
@@ -409,11 +409,7 @@ let show_all_type_errors aexpl =
           let _ = print_string "\n" in
           show aexpl) in
   (* show errors *)
-  let _ = show aexpl in
-  if error_mode = ErmInherited && has_typed_error_exprs aexpl then
-    raise Location.Already_displayed_error
-    (* raise Not_found *)
-  else ()
+  show aexpl
 
 let mk_ill_typed_exp env loc =
   let typ = {desc = Tnil; level = 0; id = 0} in
@@ -424,13 +420,15 @@ let mk_ill_typed_exp env loc =
     exp_env = env;
     exp_attributes = []; }
 
-let extract_typed_expr r = match r with
+let extract_typed_expr aexp = match aexp with
   | TypeOK e -> e
   | TypeError (loc, env, _) -> mk_ill_typed_exp env loc
   (* | TypeIgnored -> mk_ill_typed_exp Env.empty Location.none *)
 
-let extract_typed_exprs rs =
-  List.fold_left (fun acc r -> acc @ [(extract_typed_expr r)]) [] rs
+let extract_typed_exprs aexpl =
+  (* let _ = if error_mode = ErmInherited && has_typed_error_exprs aexpl then
+   *     raise Location.Already_displayed_error in *)
+  List.fold_left (fun acc aexp -> acc @ [(extract_typed_expr aexp)]) [] aexpl
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
 
