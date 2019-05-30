@@ -23,6 +23,13 @@ open Typedtree
 open Btype
 open Ctype
 
+type error_reporting_mode =
+  | ErmInherited
+  | ErmSynthesizedAbsorbing
+  | ErmSynthesizedStructural
+
+let error_mode = ErmInherited
+
 type error =
     Polymorphic_label of Longident.t
   | Constructor_arity_mismatch of Longident.t * int * int
@@ -89,8 +96,8 @@ exception Error_forward of Location.error
 let already_show_some_type_errors = ref false
 let stop_show_type_errors = ref false
 
-let already_reported_some_errors () =
-  !already_show_some_type_errors
+(* let already_reported_some_errors () =
+ *   !already_show_some_type_errors *)
 
 let label_of_kind kind =
   if kind = "record" then "field" else "constructor"
@@ -375,12 +382,11 @@ let capture_type_error f =
     TypeOK (f ())
   with
   | Error (loc, env, error) -> TypeError (loc, env, error)
-  | Location.Already_displayed_error -> TypeIgnored
-
-(* let has_typed_error_exprs rs =
- *   List.exists (fun r -> match r with
- *       | TypeError _ -> true
- *       | _ -> false) rs *)
+  | Location.Already_displayed_error as exn ->
+      if error_mode = ErmInherited then raise exn
+      else if error_mode = ErmSynthesizedAbsorbing then TypeIgnored
+      else if error_mode = ErmSynthesizedStructural then TypeIgnored
+      else TypeIgnored
 
 let show_all_type_errors errors =
   let rec show errors = match errors with
@@ -419,7 +425,9 @@ let mk_ill_typed_exp env loc =
 
 let extract_typed_expr r = match r with
   | TypeOK e -> e
-  | TypeError (loc, env, _) -> mk_ill_typed_exp env loc
+  | TypeError (loc, env, error) ->
+      if error_mode = ErmInherited then raise (Error (loc, env, error))
+      else mk_ill_typed_exp env loc
   | TypeIgnored -> mk_ill_typed_exp Env.empty Location.none
 
 let extract_typed_exprs rs =
@@ -3074,10 +3082,10 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       in
       let (pat_exp_list, new_env, unpacks, rexps) =
         type_let env rec_flag spat_sexp_list scp true in
-      let _ = show_all_type_errors (rexps) in
+      let _ = show_all_type_errors rexps in
       let rbody = capture_type_error (fun () ->
           type_expect new_env (wrap_unpacks sbody unpacks) ty_expected) in
-      let _ = show_all_type_errors [rbody] in
+      (* let _ = show_all_type_errors [rbody] in *)
       let body = extract_typed_expr rbody in
       let () = if rec_flag = Recursive then
           check_recursive_bindings env pat_exp_list in

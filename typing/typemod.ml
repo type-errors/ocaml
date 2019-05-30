@@ -2028,7 +2028,7 @@ let () =
   Location.register_error_of_exn
     (function
       | Error (loc, env, err) ->
-          if Typecore.already_reported_some_errors () then
+          if !Typecore.already_show_some_type_errors then
             match err with
             | Non_generalizable _ -> raise Location.Already_displayed_error
             | _ -> Some (Location.error_of_printer loc (report_error env) err)
