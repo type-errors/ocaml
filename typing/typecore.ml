@@ -96,9 +96,6 @@ exception Error_forward of Location.error
 let already_show_some_type_errors = ref false
 let stop_show_type_errors = ref false
 
-(* let already_reported_some_errors () =
- *   !already_show_some_type_errors *)
-
 let label_of_kind kind =
   if kind = "record" then "field" else "constructor"
 
@@ -375,25 +372,29 @@ let report_error env ppf err =
 type type_result =
   | TypeOK of expression
   | TypeError of (Location.t * Env.t * error)
-  | TypeIgnored
+  (* | TypeIgnored *)
 
 let capture_type_error f =
   try
     TypeOK (f ())
   with
   | Error (loc, env, error) -> TypeError (loc, env, error)
-  | Location.Already_displayed_error as exn ->
-      if error_mode = ErmInherited then raise exn
-      else if error_mode = ErmSynthesizedAbsorbing then TypeIgnored
-      else if error_mode = ErmSynthesizedStructural then TypeIgnored
-      else TypeIgnored
+  (* | Location.Already_displayed_error -> TypeIgnored *)
+  
+let has_typed_error_exprs aexpl =
+  let rec has_error aexpl = match aexpl with
+    | [] -> false
+    | (TypeError _)::_ -> true
+    | _::aexpl -> has_error aexpl in
+    (* | (TypeIgnored)::_ -> true *)
+  has_error aexpl
 
-let show_all_type_errors errors =
-  let rec show errors = match errors with
+let show_all_type_errors aexpl =
+  let rec show aexpl = match aexpl with
     | [] -> ()
-    | (TypeOK _)::errors -> show errors
-    | (TypeIgnored)::errors -> show errors
-    | (TypeError (loc, env, err))::errors ->
+    | (TypeOK _)::aexpl -> show aexpl
+    (* | (TypeIgnored)::aexpl -> show aexpl *)
+    | (TypeError (loc, env, err))::aexpl ->
         if !already_show_some_type_errors && not !stop_show_type_errors then (
           print_string "\nDo you want to see other type error? [y/n]: ";
           let answer = String.trim (read_line ()) in
@@ -406,13 +407,13 @@ let show_all_type_errors errors =
             | _ -> () in
           let _ = already_show_some_type_errors := true in
           let _ = print_string "\n" in
-          show errors) in
+          show aexpl) in
   (* show errors *)
-  let _ = show errors in
-  ()
-  (* if has_typed_error_exprs errors then
-   *   raise Location.Already_displayed_error
-   * else () *)
+  let _ = show aexpl in
+  if error_mode = ErmInherited && has_typed_error_exprs aexpl then
+    raise Location.Already_displayed_error
+    (* raise Not_found *)
+  else ()
 
 let mk_ill_typed_exp env loc =
   let typ = {desc = Tnil; level = 0; id = 0} in
@@ -425,10 +426,8 @@ let mk_ill_typed_exp env loc =
 
 let extract_typed_expr r = match r with
   | TypeOK e -> e
-  | TypeError (loc, env, error) ->
-      if error_mode = ErmInherited then raise (Error (loc, env, error))
-      else mk_ill_typed_exp env loc
-  | TypeIgnored -> mk_ill_typed_exp Env.empty Location.none
+  | TypeError (loc, env, _) -> mk_ill_typed_exp env loc
+  (* | TypeIgnored -> mk_ill_typed_exp Env.empty Location.none *)
 
 let extract_typed_exprs rs =
   List.fold_left (fun acc r -> acc @ [(extract_typed_expr r)]) [] rs
@@ -3085,11 +3084,10 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let _ = show_all_type_errors rexps in
       let rbody = capture_type_error (fun () ->
           type_expect new_env (wrap_unpacks sbody unpacks) ty_expected) in
-      (* let _ = show_all_type_errors [rbody] in *)
+      let _ = show_all_type_errors [rbody] in
       let body = extract_typed_expr rbody in
       let () = if rec_flag = Recursive then
           check_recursive_bindings env pat_exp_list in
-      (* let _ = show_all_type_errors (rexps @ [rbody]) in *)
       re {
         exp_desc = Texp_let(rec_flag, pat_exp_list, body);
         exp_loc = loc; exp_extra = [];

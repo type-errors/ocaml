@@ -139,8 +139,6 @@ exception Error_forward of Location.error
 val report_error: Env.t -> formatter -> error -> unit
 (* Deprecated.  Use Location.{error_of_exn, report_error}. *)
 
-(* val already_reported_some_errors: unit -> bool *)
-
 val already_show_some_type_errors : bool ref
 
 val error_mode: error_reporting_mode
