@@ -394,6 +394,7 @@ let report_type_error aexpl =
     match error with
     | Expr_type_clash _ ->
         let _ = Location.print_error std_formatter loc in
+        let _ = fprintf std_formatter " " in
         let _ = report_error env std_formatter error in
         print_string "\n"
     | _ -> () in
