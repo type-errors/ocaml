@@ -609,6 +609,14 @@ let mk_dtypedtree f =
   "-dtypedtree", Arg.Unit f, " (undocumented)"
 ;;
 
+let mk_type_error_inherited f =
+  "-type-error-inherited", Arg.Unit f, " Print type errors (inherited)"
+;;
+
+let mk_type_error_synthesized f =
+  "-type-error-synthesized", Arg.Unit f, " Print type errors (synthesized)"
+;;
+
 let mk_drawlambda f =
   "-drawlambda", Arg.Unit f, " (undocumented)"
 ;;
@@ -771,14 +779,6 @@ let mk_afl_inst_ratio f =
   \     (advanced, see afl-fuzz docs for AFL_INST_RATIO)"
 ;;
 
-let mk_type_error_inherited f =
-  "-type-error-inherited", Arg.Unit f, " Print type errors (inherited)"
-;;
-
-let mk_type_error_synthesized f =
-  "-type-error-synthesized", Arg.Unit f, " Print type errors (synthesized)"
-;;
-
 let mk__ f =
   "-", Arg.String f,
   "<file>  Treat <file> as a file name (even if it starts with `-')"
@@ -820,11 +820,10 @@ module type Common_options = sig
   val _dsource : unit -> unit
   val _dparsetree : unit -> unit
   val _dtypedtree : unit -> unit
-  val _drawlambda : unit -> unit
-  val _dlambda : unit -> unit
-
   val _type_error_inherited : unit -> unit
   val _type_error_synthesized : unit -> unit
+  val _drawlambda : unit -> unit
+  val _dlambda : unit -> unit
 
   val anonymous : string -> unit
 end
@@ -1096,14 +1095,13 @@ struct
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
+    mk_type_error_inherited F._type_error_inherited;
+    mk_type_error_synthesized F._type_error_synthesized;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_dinstr F._dinstr;
     mk_dtimings F._dtimings;
     mk_dprofile F._dprofile;
-
-    mk_type_error_inherited F._type_error_inherited;
-    mk_type_error_synthesized F._type_error_synthesized;
 
     mk_args F._args;
     mk_args0 F._args0;
@@ -1156,12 +1154,11 @@ struct
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
+    mk_type_error_inherited F._type_error_inherited;
+    mk_type_error_synthesized F._type_error_synthesized;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_dinstr F._dinstr;
-
-    mk_type_error_inherited F._type_error_inherited;
-    mk_type_error_synthesized F._type_error_synthesized;
 
     mk_args F._args;
     mk_args0 F._args0;
@@ -1274,6 +1271,8 @@ struct
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
+    mk_type_error_inherited F._type_error_inherited;
+    mk_type_error_synthesized F._type_error_synthesized;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_drawclambda F._drawclambda;
@@ -1303,9 +1302,6 @@ struct
     mk_dtimings F._dtimings;
     mk_dprofile F._dprofile;
     mk_dump_pass F._dump_pass;
-
-    mk_type_error_inherited F._type_error_inherited;
-    mk_type_error_synthesized F._type_error_synthesized;
 
     mk_args F._args;
     mk_args0 F._args0;
@@ -1380,6 +1376,8 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
+    mk_type_error_inherited F._type_error_inherited;
+    mk_type_error_synthesized F._type_error_synthesized;
     mk_drawlambda F._drawlambda;
     mk_drawclambda F._drawclambda;
     mk_dclambda F._dclambda;
@@ -1402,9 +1400,6 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_dlinear F._dlinear;
     mk_dstartup F._dstartup;
     mk_dump_pass F._dump_pass;
-
-    mk_type_error_inherited F._type_error_inherited;
-    mk_type_error_synthesized F._type_error_synthesized;
   ]
 end;;
 

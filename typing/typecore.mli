@@ -141,8 +141,6 @@ val report_error: Env.t -> formatter -> error -> unit
 
 val already_report_some_type_errors : bool ref
 
-val error_mode: error_reporting_mode
-
 (* Forward declaration, to be filled in by Typemod.type_module *)
 val type_module: (Env.t -> Parsetree.module_expr -> Typedtree.module_expr) ref
 (* Forward declaration, to be filled in by Typemod.type_open *)

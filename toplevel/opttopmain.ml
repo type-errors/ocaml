@@ -213,6 +213,8 @@ module Options = Main_args.Make_opttop_options (struct
   let _dsource = set dump_source
   let _dparsetree = set dump_parsetree
   let _dtypedtree = set dump_typedtree
+  let _type_error_inherited = set type_error_inherited
+  let _type_error_synthesized = set type_error_synthesized
   let _drawlambda = set dump_rawlambda
   let _dlambda = set dump_lambda
   let _drawclambda = set dump_rawclambda
@@ -237,10 +239,6 @@ module Options = Main_args.Make_opttop_options (struct
   let _safe_string = clear unsafe_string
   let _unsafe_string = set unsafe_string
   let _open s = open_modules := s :: !open_modules
-
-  let _type_error_inherited = set type_error_inherited
-  let _type_error_synthesized = set type_error_synthesized
-
   let _args = wrap_expand Arg.read_arg
   let _args0 = wrap_expand Arg.read_arg0
 

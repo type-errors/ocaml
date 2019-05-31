@@ -139,6 +139,8 @@ module Options = Main_args.Make_bytetop_options (struct
   let _warn_help = Warnings.help_warnings
   let _dparsetree = set dump_parsetree
   let _dtypedtree = set dump_typedtree
+  let _type_error_inherited = set type_error_inherited
+  let _type_error_synthesized = set type_error_synthesized
   let _dsource = set dump_source
   let _drawlambda = set dump_rawlambda
   let _dlambda = set dump_lambda
@@ -146,9 +148,6 @@ module Options = Main_args.Make_bytetop_options (struct
   let _dtimings () = profile_columns := [ `Time ]
   let _dprofile () = profile_columns := Profile.all_columns
   let _dinstr = set dump_instr
-
-  let _type_error_inherited = set type_error_inherited
-  let _type_error_synthesized = set type_error_synthesized
 
   let _args = wrap_expand Arg.read_arg
   let _args0 = wrap_expand Arg.read_arg0

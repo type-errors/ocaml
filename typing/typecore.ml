@@ -28,8 +28,11 @@ type error_reporting_mode =
   | ErmInherited
   | ErmSynthesized
 
-let error_mode =
-  if !Clflags.type_error_inherited then ErmInherited
+let error_mode () =
+  if !Clflags.type_error_inherited && !Clflags.type_error_synthesized then
+    let _ = print_endline "Error: conflict error reporting mode!" in
+    raise (Failure "Conflict error reporting mode")
+  else if !Clflags.type_error_inherited then ErmInherited
   else if !Clflags.type_error_synthesized then ErmSynthesized
   else ErmSingleError
 
@@ -383,7 +386,7 @@ let annotate_type_error f =
   with
   | Error (loc, env, error) ->
       TypeError (loc, env, error)
-  | Location.Already_displayed_error when error_mode != ErmSingleError ->
+  | Location.Already_displayed_error when error_mode () != ErmSingleError ->
       TypeIll
 
 let report_type_error aexpl =
@@ -399,7 +402,7 @@ let report_type_error aexpl =
     | (TypeOK _)::aexpl -> report aexpl
     | (TypeIll)::aexpl -> report aexpl
     | (TypeError (loc, env, err))::aexpl ->
-        if error_mode = ErmSingleError then (
+        if error_mode () = ErmSingleError then (
           let _ = report_one_error loc env err in
           raise Location.Already_displayed_error);
         if !already_report_some_type_errors && !continue_report_type_errors then (
@@ -416,7 +419,7 @@ let report_type_error aexpl =
   let has_error = List.exists (function
       | TypeError _ | TypeIll  -> true
       | _ -> false) aexpl in
-  let _ = if error_mode = ErmInherited && has_error then
+  let _ = if error_mode () = ErmInherited && has_error then
       raise Location.Already_displayed_error in
   ()
 
@@ -444,7 +447,7 @@ let has_ill_type_exp expl =
   List.exists is_ill_typed_exp expl
 
 let backtrack_report_other_error_by_need expl =
-  if error_mode = ErmInherited && has_ill_type_exp expl then
+  if error_mode () = ErmInherited && has_ill_type_exp expl then
     raise Location.Already_displayed_error
 
 (* Forward declaration, to be filled in by Typemod.type_module *)

@@ -122,6 +122,8 @@ val transparent_modules : bool ref
 val dump_source : bool ref
 val dump_parsetree : bool ref
 val dump_typedtree : bool ref
+val type_error_inherited : bool ref
+val type_error_synthesized : bool ref
 val dump_rawlambda : bool ref
 val dump_lambda : bool ref
 val dump_rawclambda : bool ref
@@ -201,9 +203,6 @@ val dump_flambda_verbose : bool ref
 val classic_inlining : bool ref
 val afl_instrument : bool ref
 val afl_inst_ratio : int ref
-
-val type_error_inherited : bool ref
-val type_error_synthesized : bool ref
 
 val all_passes : string list ref
 val dumped_pass : string -> bool

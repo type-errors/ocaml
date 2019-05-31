@@ -95,6 +95,8 @@ and transparent_modules = ref false     (* -trans-mod *)
 let dump_source = ref false             (* -dsource *)
 let dump_parsetree = ref false          (* -dparsetree *)
 and dump_typedtree = ref false          (* -dtypedtree *)
+and type_error_inherited = ref false    (* -type-error-inherited *)
+and type_error_synthesized = ref false  (* -type-error-synthesized *)
 and dump_rawlambda = ref false          (* -drawlambda *)
 and dump_lambda = ref false             (* -dlambda *)
 and dump_rawclambda = ref false         (* -drawclambda *)
@@ -137,9 +139,6 @@ let clambda_checks = ref false          (* -clambda-checks *)
 let flambda_invariant_checks = ref true (* -flambda-invariants *)
 
 let dont_write_files = ref false        (* set to true under ocamldoc *)
-
-let type_error_inherited = ref false    (* -type-error-inherited *)
-let type_error_synthesized = ref false  (* -type-error-synthesized *)
 
 let std_include_flag prefix =
   if !no_std_include then ""

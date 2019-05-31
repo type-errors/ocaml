@@ -52,11 +52,10 @@ module type Common_options = sig
   val _dsource : unit -> unit
   val _dparsetree : unit -> unit
   val _dtypedtree : unit -> unit
-  val _drawlambda : unit -> unit
-  val _dlambda : unit -> unit
-
   val _type_error_inherited : unit -> unit
   val _type_error_synthesized : unit -> unit
+  val _drawlambda : unit -> unit
+  val _dlambda : unit -> unit
 
   val anonymous : string -> unit
 end;;

@@ -198,6 +198,8 @@ module Options = Main_args.Make_optcomp_options (struct
   let _dsource = set dump_source
   let _dparsetree = set dump_parsetree
   let _dtypedtree = set dump_typedtree
+  let _type_error_inherited = set type_error_inherited
+  let _type_error_synthesized = set type_error_synthesized
   let _drawlambda = set dump_rawlambda
   let _dlambda = set dump_lambda
   let _drawclambda = set dump_rawclambda
@@ -229,9 +231,6 @@ module Options = Main_args.Make_optcomp_options (struct
   let _dtimings () = profile_columns := [ `Time ]
   let _dprofile () = profile_columns := Profile.all_columns
   let _opaque = set opaque
-
-  let _type_error_inherited = set type_error_inherited
-  let _type_error_synthesized = set type_error_synthesized
 
   let _args = Arg.read_arg
   let _args0 = Arg.read_arg0
