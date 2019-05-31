@@ -374,13 +374,13 @@ type type_result =
   | TypeError of (Location.t * Env.t * error)
   (* | TypeIgnored *)
 
-let capture_type_error f =
+let annotate_type_error f =
   try
     TypeOK (f ())
   with
   | Error (loc, env, error) -> TypeError (loc, env, error)
   (* | Location.Already_displayed_error -> TypeIgnored *)
-  
+
 (* let has_typed_error_exprs aexpl =
  *   let rec has_error aexpl = match aexpl with
  *     | [] -> false
@@ -3077,13 +3077,13 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         | _, Recursive -> Some (Annot.Idef loc)
         | _, Nonrecursive -> Some (Annot.Idef sbody.pexp_loc)
       in
-      let (pat_exp_list, new_env, unpacks, rexps) =
+      let (pat_exp_list, new_env, unpacks, aexpl) =
         type_let env rec_flag spat_sexp_list scp true in
-      let _ = show_all_type_errors rexps in
-      let rbody = capture_type_error (fun () ->
+      let _ = show_all_type_errors aexpl in
+      let abody = annotate_type_error (fun () ->
           type_expect new_env (wrap_unpacks sbody unpacks) ty_expected) in
-      let _ = show_all_type_errors [rbody] in
-      let body = extract_typed_expr rbody in
+      let _ = show_all_type_errors [abody] in
+      let body = extract_typed_expr abody in
       let () = if rec_flag = Recursive then
           check_recursive_bindings env pat_exp_list in
       re {
@@ -3208,11 +3208,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let subtypes = List.map (fun _ -> newgenvar ()) sexpl in
       let to_unify = newgenty (Ttuple subtypes) in
       unify_exp_types loc env to_unify ty_expected;
-      let rexpls = List.map2 (fun body ty ->
-          capture_type_error (fun () ->
+      let aexpl = List.map2 (fun body ty ->
+          annotate_type_error (fun () ->
               type_expect env body ty)) sexpl subtypes in
-      let expl = extract_typed_exprs rexpls in
-      let _ = show_all_type_errors rexpls in
+      let expl = extract_typed_exprs aexpl in
+      let _ = show_all_type_errors aexpl in
       re {
         exp_desc = Texp_tuple expl;
         exp_loc = loc; exp_extra = [];
@@ -3430,15 +3430,15 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
   | Pexp_ifthenelse(scond, sifso, sifnot) ->
-      let rcond = capture_type_error (fun () ->
+      let acond = annotate_type_error (fun () ->
           type_expect env scond Predef.type_bool) in
       begin match sifnot with
         None ->
-          let rifso = capture_type_error (fun () ->
+          let aifso = annotate_type_error (fun () ->
               type_expect env sifso Predef.type_unit) in
-          let _ = show_all_type_errors [rcond; rifso] in
-          let cond = extract_typed_expr rcond in
-          let ifso = extract_typed_expr rifso in
+          let _ = show_all_type_errors [acond; aifso] in
+          let cond = extract_typed_expr acond in
+          let ifso = extract_typed_expr aifso in
           rue {
             exp_desc = Texp_ifthenelse(cond, ifso, None);
             exp_loc = loc; exp_extra = [];
@@ -3446,14 +3446,14 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
             exp_attributes = sexp.pexp_attributes;
             exp_env = env }
       | Some sifnot ->
-          let rifso = capture_type_error (fun () ->
+          let aifso = annotate_type_error (fun () ->
               type_expect env sifso ty_expected) in
-          let rifnot = capture_type_error (fun () ->
+          let aifnot = annotate_type_error (fun () ->
               type_expect env sifnot ty_expected) in
-          let _ = show_all_type_errors [rcond; rifso; rifnot] in
-          let cond = extract_typed_expr rcond in
-          let ifso = extract_typed_expr rifso in
-          let ifnot = extract_typed_expr rifnot in
+          let _ = show_all_type_errors [acond; aifso; aifnot] in
+          let cond = extract_typed_expr acond in
+          let ifso = extract_typed_expr aifso in
+          let ifnot = extract_typed_expr aifnot in
           unify_exp env ifso ifnot.exp_type;
           re {
             exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
@@ -5129,9 +5129,9 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
       attrs_list
       pat_list
   in
-  let rexp_list =
+  let aexp_list =
     List.map2 (fun {pvb_expr=sexp; pvb_attributes; _} (pat, slot) ->
-        capture_type_error (fun () ->
+        annotate_type_error (fun () ->
             let sexp =
               if rec_flag = Recursive then wrap_unpacks sexp unpacks else sexp in
             if is_recursive then current_slot := slot;
@@ -5155,7 +5155,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
                 Builtin_attributes.warning_scope pvb_attributes (fun () ->
                     type_expect exp_env sexp pat.pat_type)))
       spat_sexp_list pat_slot_list in
-  let exp_list = extract_typed_exprs rexp_list in
+  let exp_list = extract_typed_exprs aexp_list in
   current_slot := None;
   if is_recursive && not !rec_needed
   && Warnings.is_active Warnings.Unused_rec_flag then begin
@@ -5201,7 +5201,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
          | Tpat_alias ({pat_desc=Tpat_any}, _, _) -> ()
          | _ -> raise(Error(pat.pat_loc, env, Illegal_letrec_pat)))
       l;
-  (l, new_env, unpacks, rexp_list)
+  (l, new_env, unpacks, aexp_list)
 
 (* Typing of toplevel bindings *)
 
