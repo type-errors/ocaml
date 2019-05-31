@@ -93,7 +93,7 @@ exception Error_forward of Location.error
 
 (* TRUNG: function to show type errors *)
 
-let already_show_some_type_errors = ref false
+let already_report_some_type_errors = ref false
 let continue_report_type_errors = ref true
 
 let label_of_kind kind =
@@ -372,28 +372,22 @@ let report_error env ppf err =
 type type_result =
   | TypeOK of expression
   | TypeError of (Location.t * Env.t * error)
-  (* | TypeIgnored *)
+  | TypeIll
 
 let annotate_type_error f =
   try
     TypeOK (f ())
   with
   | Error (loc, env, error) -> TypeError (loc, env, error)
-  (* | Location.Already_displayed_error -> TypeIgnored *)
-
-let has_typed_error aexpl =
-  List.exists (fun aexp -> match aexp with
-      | TypeError _ -> true
-      (* | TypeIgnored -> true *)
-      | _ -> false) aexpl
+  | Location.Already_displayed_error -> TypeIll
 
 let report_all_type_errors aexpl =
-  let rec show aexpl = match aexpl with
+  let rec report aexpl = match aexpl with
     | [] -> ()
-    | (TypeOK _)::aexpl -> show aexpl
-    (* | (TypeIgnored)::aexpl -> show aexpl *)
+    | (TypeOK _)::aexpl -> report aexpl
+    | (TypeIll)::aexpl -> report aexpl
     | (TypeError (loc, env, err))::aexpl ->
-        if !already_show_some_type_errors && !continue_report_type_errors then (
+        if !already_report_some_type_errors && !continue_report_type_errors then (
           print_string "\nDo you want to see other type error? [y/n]: ";
           let answer = String.trim (read_line ()) in
           if String.compare answer "y" = 0 then print_endline ""
@@ -403,12 +397,15 @@ let report_all_type_errors aexpl =
           let _ = match err with
             | Expr_type_clash _ -> report_error env std_formatter err
             | _ -> () in
-          let _ = already_show_some_type_errors := true in
+          let _ = already_report_some_type_errors := true in
           let _ = print_string "\n" in
-          show aexpl) in
-  (* show errors *)
-  let _ = show aexpl in
-  let _ = if error_mode = ErmInherited && has_typed_error aexpl then
+          report aexpl ) in
+  (* report errors *)
+  let _ = report aexpl in
+  let has_error = List.exists (function
+      | TypeError _ | TypeIll  -> true
+      | _ -> false) aexpl in
+  let _ = if error_mode = ErmInherited && has_error then
       raise Location.Already_displayed_error in
   ()
 
@@ -424,10 +421,16 @@ let mk_ill_typed_exp env loc =
 let extract_typed_expr aexp = match aexp with
   | TypeOK e -> e
   | TypeError (loc, env, _) -> mk_ill_typed_exp env loc
-  (* | TypeIgnored -> mk_ill_typed_exp Env.empty Location.none *)
+  | TypeIll -> mk_ill_typed_exp Env.empty Location.none
 
 let extract_typed_exprs aexpl =
   List.fold_left (fun acc aexp -> acc @ [(extract_typed_expr aexp)]) [] aexpl
+
+let is_ill_typed_exp exp =
+  exp.exp_type.desc = Tnil
+
+let has_ill_type_exp expl =
+  List.exists is_ill_typed_exp expl
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
 
@@ -3079,6 +3082,9 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let (pat_exp_list, new_env, unpacks, aexpl) =
         type_let env rec_flag spat_sexp_list scp true in
       let _ = report_all_type_errors aexpl in
+      let expl = extract_typed_exprs aexpl in
+      let _ = if error_mode = ErmInherited && has_ill_type_exp expl then
+          raise Location.Already_displayed_error in
       let abody = annotate_type_error (fun () ->
           type_expect new_env (wrap_unpacks sbody unpacks) ty_expected) in
       let _ = report_all_type_errors [abody] in
