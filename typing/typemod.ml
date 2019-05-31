@@ -2033,7 +2033,5 @@ let () =
             | Non_generalizable _ -> raise Location.Already_displayed_error
             | _ -> Some (Location.error_of_printer loc (report_error env) err)
           else Some (Location.error_of_printer loc (report_error env) err)
-      | Error_forward err ->
-          Some err
-      | _ ->
-          None)
+      | Error_forward err -> Some err
+      | _ -> None)

@@ -94,7 +94,7 @@ exception Error_forward of Location.error
 (* TRUNG: function to show type errors *)
 
 let already_show_some_type_errors = ref false
-let stop_show_type_errors = ref false
+let continue_report_type_errors = ref true
 
 let label_of_kind kind =
   if kind = "record" then "field" else "constructor"
@@ -381,26 +381,24 @@ let annotate_type_error f =
   | Error (loc, env, error) -> TypeError (loc, env, error)
   (* | Location.Already_displayed_error -> TypeIgnored *)
 
-(* let has_typed_error_exprs aexpl =
- *   let rec has_error aexpl = match aexpl with
- *     | [] -> false
- *     | (TypeError _)::_ -> true
- *     | _::aexpl -> has_error aexpl in
- *     (\* | (TypeIgnored)::_ -> true *\)
- *   has_error aexpl *)
+let has_typed_error aexpl =
+  List.exists (fun aexp -> match aexp with
+      | TypeError _ -> true
+      (* | TypeIgnored -> true *)
+      | _ -> false) aexpl
 
-let show_all_type_errors aexpl =
+let report_all_type_errors aexpl =
   let rec show aexpl = match aexpl with
     | [] -> ()
     | (TypeOK _)::aexpl -> show aexpl
     (* | (TypeIgnored)::aexpl -> show aexpl *)
     | (TypeError (loc, env, err))::aexpl ->
-        if !already_show_some_type_errors && not !stop_show_type_errors then (
+        if !already_show_some_type_errors && !continue_report_type_errors then (
           print_string "\nDo you want to see other type error? [y/n]: ";
           let answer = String.trim (read_line ()) in
           if String.compare answer "y" = 0 then print_endline ""
-          else stop_show_type_errors := true);
-        if not !stop_show_type_errors then (
+          else continue_report_type_errors := false);
+        if !continue_report_type_errors then (
           let _ = Location.print_error std_formatter loc in
           let _ = match err with
             | Expr_type_clash _ -> report_error env std_formatter err
@@ -409,7 +407,10 @@ let show_all_type_errors aexpl =
           let _ = print_string "\n" in
           show aexpl) in
   (* show errors *)
-  show aexpl
+  let _ = show aexpl in
+  let _ = if error_mode = ErmInherited && has_typed_error aexpl then
+      raise Location.Already_displayed_error in
+  ()
 
 let mk_ill_typed_exp env loc =
   let typ = {desc = Tnil; level = 0; id = 0} in
@@ -426,8 +427,6 @@ let extract_typed_expr aexp = match aexp with
   (* | TypeIgnored -> mk_ill_typed_exp Env.empty Location.none *)
 
 let extract_typed_exprs aexpl =
-  (* let _ = if error_mode = ErmInherited && has_typed_error_exprs aexpl then
-   *     raise Location.Already_displayed_error in *)
   List.fold_left (fun acc aexp -> acc @ [(extract_typed_expr aexp)]) [] aexpl
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
@@ -3079,10 +3078,10 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       in
       let (pat_exp_list, new_env, unpacks, aexpl) =
         type_let env rec_flag spat_sexp_list scp true in
-      let _ = show_all_type_errors aexpl in
+      let _ = report_all_type_errors aexpl in
       let abody = annotate_type_error (fun () ->
           type_expect new_env (wrap_unpacks sbody unpacks) ty_expected) in
-      let _ = show_all_type_errors [abody] in
+      let _ = report_all_type_errors [abody] in
       let body = extract_typed_expr abody in
       let () = if rec_flag = Recursive then
           check_recursive_bindings env pat_exp_list in
@@ -3212,7 +3211,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           annotate_type_error (fun () ->
               type_expect env body ty)) sexpl subtypes in
       let expl = extract_typed_exprs aexpl in
-      let _ = show_all_type_errors aexpl in
+      let _ = report_all_type_errors aexpl in
       re {
         exp_desc = Texp_tuple expl;
         exp_loc = loc; exp_extra = [];
@@ -3436,7 +3435,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         None ->
           let aifso = annotate_type_error (fun () ->
               type_expect env sifso Predef.type_unit) in
-          let _ = show_all_type_errors [acond; aifso] in
+          let _ = report_all_type_errors [acond; aifso] in
           let cond = extract_typed_expr acond in
           let ifso = extract_typed_expr aifso in
           rue {
@@ -3450,7 +3449,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
               type_expect env sifso ty_expected) in
           let aifnot = annotate_type_error (fun () ->
               type_expect env sifnot ty_expected) in
-          let _ = show_all_type_errors [acond; aifso; aifnot] in
+          let _ = report_all_type_errors [acond; aifso; aifnot] in
           let cond = extract_typed_expr acond in
           let ifso = extract_typed_expr aifso in
           let ifnot = extract_typed_expr aifnot in
