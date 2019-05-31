@@ -138,6 +138,9 @@ let flambda_invariant_checks = ref true (* -flambda-invariants *)
 
 let dont_write_files = ref false        (* set to true under ocamldoc *)
 
+let type_error_inherited = ref false    (* -type-error-inherited *)
+let type_error_synthesized = ref false  (* -type-error-synthesized *)
+
 let std_include_flag prefix =
   if !no_std_include then ""
   else (prefix ^ (Filename.quote Config.standard_library))

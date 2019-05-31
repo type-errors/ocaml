@@ -230,6 +230,9 @@ module Options = Main_args.Make_optcomp_options (struct
   let _dprofile () = profile_columns := Profile.all_columns
   let _opaque = set opaque
 
+  let _type_error_inherited = set type_error_inherited
+  let _type_error_synthesized = set type_error_synthesized
+
   let _args = Arg.read_arg
   let _args0 = Arg.read_arg0
 

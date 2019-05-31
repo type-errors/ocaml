@@ -238,6 +238,9 @@ module Options = Main_args.Make_opttop_options (struct
   let _unsafe_string = set unsafe_string
   let _open s = open_modules := s :: !open_modules
 
+  let _type_error_inherited = set type_error_inherited
+  let _type_error_synthesized = set type_error_synthesized
+
   let _args = wrap_expand Arg.read_arg
   let _args0 = wrap_expand Arg.read_arg0
 

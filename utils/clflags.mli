@@ -202,6 +202,9 @@ val classic_inlining : bool ref
 val afl_instrument : bool ref
 val afl_inst_ratio : int ref
 
+val type_error_inherited : bool ref
+val type_error_synthesized : bool ref
+
 val all_passes : string list ref
 val dumped_pass : string -> bool
 val set_dumped_pass : string -> bool -> unit

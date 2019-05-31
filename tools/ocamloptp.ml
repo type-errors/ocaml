@@ -178,7 +178,8 @@ module Options = Main_args.Make_optcomp_options (struct
   let _dtimings = option "-dtimings"
   let _dprofile = option "-dprofile"
   let _opaque = option "-opaque"
-
+  let _type_error_inherited = option "-type-error-inherited"
+  let _type_error_synthesized = option "-type-error-synthesized"
   let _args = Arg.read_arg
   let _args0 = Arg.read_arg0
   let anonymous = process_file

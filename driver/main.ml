@@ -120,6 +120,9 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _dtimings () = profile_columns := [ `Time ]
   let _dprofile () = profile_columns := Profile.all_columns
 
+  let _type_error_inherited = set type_error_inherited
+  let _type_error_synthesized = set type_error_synthesized
+
   let _args = Arg.read_arg
   let _args0 = Arg.read_arg0
 

@@ -129,9 +129,9 @@ type error =
   | Illegal_class_expr
 
 type error_reporting_mode =
+  | ErmSingleError
   | ErmInherited
-  | ErmSynthesizedAbsorbing
-  | ErmSynthesizedStructural
+  | ErmSynthesized
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
