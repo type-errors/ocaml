@@ -432,6 +432,10 @@ let is_ill_typed_exp exp =
 let has_ill_type_exp expl =
   List.exists is_ill_typed_exp expl
 
+let backtrack_report_other_error_by_need expl =
+  if error_mode = ErmInherited && has_ill_type_exp expl then
+    raise Location.Already_displayed_error
+
 (* Forward declaration, to be filled in by Typemod.type_module *)
 
 let type_module =
@@ -3083,8 +3087,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         type_let env rec_flag spat_sexp_list scp true in
       let _ = report_all_type_errors aexpl in
       let expl = extract_typed_exprs aexpl in
-      let _ = if error_mode = ErmInherited && has_ill_type_exp expl then
-          raise Location.Already_displayed_error in
+      let _ = backtrack_report_other_error_by_need expl in
       let abody = annotate_type_error (fun () ->
           type_expect new_env (wrap_unpacks sbody unpacks) ty_expected) in
       let _ = report_all_type_errors [abody] in
@@ -3437,13 +3440,16 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
   | Pexp_ifthenelse(scond, sifso, sifnot) ->
       let acond = annotate_type_error (fun () ->
           type_expect env scond Predef.type_bool) in
+      let _ = report_all_type_errors [acond] in
+      let cond = extract_typed_expr acond in
+      let _ = backtrack_report_other_error_by_need [cond] in
       begin match sifnot with
         None ->
           let aifso = annotate_type_error (fun () ->
               type_expect env sifso Predef.type_unit) in
-          let _ = report_all_type_errors [acond; aifso] in
-          let cond = extract_typed_expr acond in
+          let _ = report_all_type_errors [aifso] in
           let ifso = extract_typed_expr aifso in
+          let _ = backtrack_report_other_error_by_need [ifso] in
           rue {
             exp_desc = Texp_ifthenelse(cond, ifso, None);
             exp_loc = loc; exp_extra = [];
@@ -3455,8 +3461,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
               type_expect env sifso ty_expected) in
           let aifnot = annotate_type_error (fun () ->
               type_expect env sifnot ty_expected) in
-          let _ = report_all_type_errors [acond; aifso; aifnot] in
-          let cond = extract_typed_expr acond in
+          let _ = report_all_type_errors [aifso; aifnot] in
           let ifso = extract_typed_expr aifso in
           let ifnot = extract_typed_expr aifnot in
           unify_exp env ifso ifnot.exp_type;
