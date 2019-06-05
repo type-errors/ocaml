@@ -391,13 +391,17 @@ let annotate_type_error f =
 
 let report_type_error aexpl =
   let report_one_error loc env error =
-    match error with
-    | Expr_type_clash _ ->
-        let _ = Location.print_error std_formatter loc in
-        let _ = fprintf std_formatter " " in
-        let _ = report_error env std_formatter error in
-        print_string "\n"
-    | _ -> () in
+    let _ = Location.print_error std_formatter loc in
+    let _ = fprintf std_formatter " " in
+    let _ = report_error env std_formatter error in
+    print_string "\n" in
+    (* match error with
+     * | Apply_non_function _ ->
+     *     let _ = Location.print_error std_formatter loc in
+     *     let _ = fprintf std_formatter " " in
+     *     let _ = report_error env std_formatter error in
+     *     print_string "\n"
+     * | _ -> () in *)
   let rec report aexpl = match aexpl with
     | [] -> ()
     | (TypeOK _)::aexpl -> report aexpl
