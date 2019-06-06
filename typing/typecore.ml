@@ -113,13 +113,17 @@ let already_report_some_type_errors = ref false
 let continue_report_type_errors = ref true
 let report_one_type_error_at_a_time = ref false
 let type_infer_order = ref TioLeftRight
+let num_type_error = ref 0
 
 let _ = type_infer_order := TioRightLeft
 let _ = type_infer_order := TioRandom
-let _ = type_infer_order := TioRightLeft
+let _ = type_infer_order := TioLeftRight
 
 let wrap_list_map2 f xs ys =
-  match !type_infer_order with
+  let type_check_order =
+    if !Clflags.type_check_right_order then TioRightLeft
+    else TioLeftRight in
+  match type_check_order with
   | TioLeftRight ->
       List.map2 f xs ys
   | TioRightLeft ->
@@ -422,6 +426,7 @@ let report_type_error aexpl =
     let _ = Location.print_error std_formatter loc in
     let _ = fprintf std_formatter " " in
     let _ = report_error env std_formatter error in
+    let _ = num_type_error := !num_type_error + 1 in
     print_string "\n" in
     (* match error with
      * | Expr_type_clash _ ->

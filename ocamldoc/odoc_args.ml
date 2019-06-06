@@ -246,6 +246,7 @@ module Options = Main_args.Make_ocamldoc_options(struct
   let _dtypedtree = set Clflags.dump_typedtree
   let _type_error_inherited = set Clflags.type_error_inherited
   let _type_error_synthesized = set Clflags.type_error_synthesized
+  let _type_check_right_order = set Clflags.type_check_right_order
   let _drawlambda = set Clflags.dump_rawlambda
   let _dlambda = set Clflags.dump_lambda
   let _dflambda = set Clflags.dump_flambda

@@ -215,6 +215,7 @@ module Options = Main_args.Make_opttop_options (struct
   let _dtypedtree = set dump_typedtree
   let _type_error_inherited = set type_error_inherited
   let _type_error_synthesized = set type_error_synthesized
+  let _type_check_right_order = set type_check_right_order
   let _drawlambda = set dump_rawlambda
   let _dlambda = set dump_lambda
   let _drawclambda = set dump_rawclambda

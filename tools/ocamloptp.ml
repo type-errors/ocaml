@@ -151,6 +151,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _dtypedtree = option "-dtypedtree"
   let _type_error_inherited = option "-type-error-inherited"
   let _type_error_synthesized = option "-type-error-synthesized"
+  let _type_check_right_order = option "-type-check-right-order"
   let _drawlambda = option "-drawlambda"
   let _dlambda = option "-dlambda"
   let _drawclambda = option "-drawclambda"

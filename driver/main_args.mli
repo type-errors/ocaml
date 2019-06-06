@@ -54,6 +54,7 @@ module type Common_options = sig
   val _dtypedtree : unit -> unit
   val _type_error_inherited : unit -> unit
   val _type_error_synthesized : unit -> unit
+  val _type_check_right_order : unit -> unit
   val _drawlambda : unit -> unit
   val _dlambda : unit -> unit
 
