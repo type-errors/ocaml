@@ -473,14 +473,14 @@ let get_type_infer_order () =
   else if !Clflags.type_infer_order_random then TioRandom
   else TioLeftRight
 
-let wrap_type_infer_one_exp finfer =
+let wrap_type_infer_exp finfer =
   let aexp = annotate_type_exp finfer in
   let _ = report_type_error [aexp] in
   let exp = extract_typed_expr aexp in
   let _ = backtrack_report_other_error_by_need [exp] in
   exp
 
-let wrap_type_infer_pair_exp finfer1 finfer2 =
+let wrap_type_infer_pair finfer1 finfer2 =
   let swap_pair (x, y) = (y, x) in
   let aexp1, aexp2 = match get_type_infer_order () with
     | TioLeftRight ->
@@ -496,7 +496,7 @@ let wrap_type_infer_pair_exp finfer1 finfer2 =
   let _ = backtrack_report_other_error_by_need [exp1; exp2] in
   (exp1, exp2)
 
-let wrap_type_infer_list_exp finfers =
+let wrap_type_infer_list finfers =
   let rec shuffle_list xs =
     if List.length xs <= 1 then xs
     else
@@ -3168,8 +3168,9 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       in
       let (pat_exp_list, new_env, unpacks) =
         type_let env rec_flag spat_sexp_list scp true in
-      let body = wrap_type_infer_one_exp (fun () ->
-          type_expect new_env (wrap_unpacks sbody unpacks) ty_expected) in
+      let thunk_body () =
+        type_expect new_env (wrap_unpacks sbody unpacks) ty_expected in
+      let body = wrap_type_infer_exp thunk_body in
       let () = if rec_flag = Recursive then
           check_recursive_bindings env pat_exp_list in
       re {
@@ -3294,9 +3295,9 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let subtypes = List.map (fun _ -> newgenvar ()) sexpl in
       let to_unify = newgenty (Ttuple subtypes) in
       unify_exp_types loc env to_unify ty_expected;
-      let finfer_expl = List.map2 (fun body ty ->
+      let thunk_expl = List.map2 (fun body ty ->
           (fun () -> type_expect env body ty)) sexpl subtypes in
-      let expl = wrap_type_infer_list_exp finfer_expl in
+      let expl = wrap_type_infer_list thunk_expl in
       re {
         exp_desc = Texp_tuple expl;
         exp_loc = loc; exp_extra = [];
@@ -3514,12 +3515,12 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
   | Pexp_ifthenelse(scond, sifso, sifnot) ->
-      let cond = wrap_type_infer_one_exp (fun () ->
-          type_expect env scond Predef.type_bool) in
+      let thunk_cond () = type_expect env scond Predef.type_bool in
+      let cond = wrap_type_infer_exp thunk_cond in
       begin match sifnot with
         None ->
-          let ifso = wrap_type_infer_one_exp (fun () ->
-                type_expect env sifso Predef.type_unit) in
+          let thunk_ifso () = type_expect env sifso Predef.type_unit in
+          let ifso = wrap_type_infer_exp thunk_ifso in
           rue {
             exp_desc = Texp_ifthenelse(cond, ifso, None);
             exp_loc = loc; exp_extra = [];
@@ -3527,10 +3528,9 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
             exp_attributes = sexp.pexp_attributes;
             exp_env = env }
       | Some sifnot ->
-          let ifso, ifnot =
-            wrap_type_infer_pair_exp
-              (fun () -> type_expect env sifso ty_expected)
-              (fun () -> type_expect env sifnot ty_expected) in
+          let thunk_ifso () = type_expect env sifso ty_expected in
+          let thunk_ifnot () = type_expect env sifnot ty_expected in
+          let ifso, ifnot = wrap_type_infer_pair thunk_ifso thunk_ifnot in
           unify_exp env ifso ifnot.exp_type;
           re {
             exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
@@ -5206,7 +5206,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
       attrs_list
       pat_list
   in
-  let finfer_exp_list =
+  let thunk_exp_list =
     List.map2
       (fun {pvb_expr=sexp; pvb_attributes; _} (pat, slot) ->
          let sexp =
@@ -5233,7 +5233,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
                 Builtin_attributes.warning_scope pvb_attributes (fun () ->
                   type_expect exp_env sexp pat.pat_type)))
       spat_sexp_list pat_slot_list in
-  let exp_list = wrap_type_infer_list_exp finfer_exp_list in
+  let exp_list = wrap_type_infer_list thunk_exp_list in
   current_slot := None;
   if is_recursive && not !rec_needed
   && Warnings.is_active Warnings.Unused_rec_flag then begin
