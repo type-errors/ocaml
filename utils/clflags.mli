@@ -124,7 +124,8 @@ val dump_parsetree : bool ref
 val dump_typedtree : bool ref
 val type_error_inherited : bool ref
 val type_error_synthesized : bool ref
-val type_check_right_order : bool ref
+val type_infer_order_right : bool ref
+val type_infer_order_random : bool ref
 val dump_rawlambda : bool ref
 val dump_lambda : bool ref
 val dump_rawclambda : bool ref
