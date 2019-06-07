@@ -100,7 +100,7 @@ exception Error_forward of Location.error
 (* TRUNG: function to show type errors *)
 
 type type_result =
-  | TypeOK of expression
+  | TypedExp of expression
   | TypeError of (Location.t * Env.t * error)
   | TypeIll
 
@@ -387,15 +387,14 @@ let report_error env ppf = function
 let report_error env ppf err =
   wrap_printing_env env (fun () -> report_error env ppf err)
 
-let annotate_type_exp f =
-  try TypeOK (f ())
-  with
+let apply_thunk finfer =
+  try TypedExp (finfer ()) with
   | Error (loc, env, error) ->
       TypeError (loc, env, error)
   | Location.Already_displayed_error when error_mode () != ErmSingleError ->
       TypeIll
 
-let report_type_error aexpl =
+let report_all_type_errors aexpl =
   let report_one_error loc env error =
     let _ = fprintf std_formatter "\n" in
     let _ = Location.print_error std_formatter loc in
@@ -403,16 +402,9 @@ let report_type_error aexpl =
     let _ = report_error env std_formatter error in
     let _ = num_type_error := !num_type_error + 1 in
     print_string "\n" in
-    (* match error with
-     * | Expr_type_clash _ ->
-     *     let _ = Location.print_error std_formatter loc in
-     *     let _ = fprintf std_formatter " " in
-     *     let _ = report_error env std_formatter error in
-     *     print_string "\n"
-     * | _ -> () in *)
   let rec report aexpl = match aexpl with
     | [] -> ()
-    | (TypeOK _)::aexpl -> report aexpl
+    | (TypedExp _)::aexpl -> report aexpl
     | (TypeIll)::aexpl -> report aexpl
     | (TypeError (loc, env, err))::aexpl ->
         if error_mode () = ErmSingleError then (
@@ -448,15 +440,12 @@ let mk_ill_typed_exp env loc =
     exp_attributes = []; }
 
 let extract_typed_expr aexp = match aexp with
-  | TypeOK e -> e
+  | TypedExp e -> e
   | TypeError (loc, env, _) -> mk_ill_typed_exp env loc
   | TypeIll -> mk_ill_typed_exp Env.empty Location.none
 
-let extract_typed_expr_pair (aexp1, aexp2) =
-  (extract_typed_expr aexp1, extract_typed_expr aexp2)
-
 let extract_typed_expr_list aexpl =
-  List.fold_left (fun acc aexp -> acc @ [(extract_typed_expr aexp)]) [] aexpl
+  List.map extract_typed_expr aexpl
 
 let is_ill_typed_exp exp =
   exp.exp_type.desc = Tnil
@@ -464,7 +453,7 @@ let is_ill_typed_exp exp =
 let has_ill_type_exp expl =
   List.exists is_ill_typed_exp expl
 
-let backtrack_report_other_error_by_need expl =
+let backtrack_on_type_error expl =
   if error_mode () = ErmInherited && has_ill_type_exp expl then
     raise Location.Already_displayed_error
 
@@ -474,26 +463,26 @@ let get_type_infer_order () =
   else TioLeftRight
 
 let wrap_type_infer_exp finfer =
-  let aexp = annotate_type_exp finfer in
-  let _ = report_type_error [aexp] in
+  let aexp = apply_func_infer finfer in
+  let _ = report_all_type_errors [aexp] in
   let exp = extract_typed_expr aexp in
-  let _ = backtrack_report_other_error_by_need [exp] in
+  let _ = backtrack_on_type_error [exp] in
   exp
 
 let wrap_type_infer_pair finfer1 finfer2 =
   let swap_pair (x, y) = (y, x) in
   let aexp1, aexp2 = match get_type_infer_order () with
     | TioLeftRight ->
-        (annotate_type_exp finfer1, annotate_type_exp finfer2)
+        (apply_func_infer finfer1, apply_func_infer finfer2)
     | TioRightLeft ->
-        swap_pair (annotate_type_exp finfer2, annotate_type_exp finfer1)
+        swap_pair (apply_func_infer finfer2, apply_func_infer finfer1)
     | TioRandom ->
         if Random.bool() then
-          (annotate_type_exp finfer1, annotate_type_exp finfer2)
-        else swap_pair (annotate_type_exp finfer2, annotate_type_exp finfer1) in
-  let _ = report_type_error [aexp1; aexp2] in
-  let exp1, exp2 = extract_typed_expr_pair (aexp1, aexp2) in
-  let _ = backtrack_report_other_error_by_need [exp1; exp2] in
+          (apply_func_infer finfer1, apply_func_infer finfer2)
+        else swap_pair (apply_func_infer finfer2, apply_func_infer finfer1) in
+  let _ = report_all_type_errors [aexp1; aexp2] in
+  let exp1, exp2 = extract_typed_expr aexp1, extract_typed_expr aexp2 in
+  let _ = backtrack_on_type_error [exp1; exp2] in
   (exp1, exp2)
 
 let wrap_type_infer_list finfers =
@@ -506,17 +495,17 @@ let wrap_type_infer_list finfers =
       List.rev_append (shuffle_list xs1) (shuffle_list xs2) in
   let aexpl = match get_type_infer_order () with
     | TioLeftRight ->
-        List.map annotate_type_exp finfers
+        List.map apply_func_infer finfers
     | TioRightLeft ->
-        List.rev_map annotate_type_exp (List.rev finfers)
+        List.rev_map apply_func_infer (List.rev finfers)
     | TioRandom ->
         finfers |> List.mapi (fun i f -> (f, i)) |> shuffle_list |>
-        List.map (fun (finfer, id) -> (annotate_type_exp finfer, id)) |>
+        List.map (fun (finfer, id) -> (apply_func_infer finfer, id)) |>
         List.sort (fun (_, id1) (_, id2) -> id1 - id2) |>
         List.split |> fst in
-  let _ = report_type_error aexpl in
+  let _ = report_all_type_errors aexpl in
   let expl = extract_typed_expr_list aexpl in
-  let _ = backtrack_report_other_error_by_need expl in
+  let _ = backtrack_on_type_error expl in
   expl
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
