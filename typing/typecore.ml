@@ -119,7 +119,7 @@ let _ = type_infer_order := TioRightLeft
 let _ = type_infer_order := TioRandom
 let _ = type_infer_order := TioLeftRight
 
-let wrap_list_map2 f xs ys =
+let wrap_type_check_list f xs ys =
   let type_check_order =
     if !Clflags.type_check_right_order then TioRightLeft
     else TioLeftRight in
@@ -130,6 +130,18 @@ let wrap_list_map2 f xs ys =
       let xs', ys' = List.rev xs, List.rev ys in
       List.rev_map2 f xs' ys'
   | TioRandom -> List.map2 f xs ys
+
+let wrap_type_check_pair f1 f2 =
+  let swap (x, y) = (y, x) in
+  let type_check_order =
+    if !Clflags.type_check_right_order then TioRightLeft
+    else TioLeftRight in
+  match type_check_order with
+  | TioLeftRight -> (f1 (), f2 ())
+  | TioRightLeft -> swap (f2 (), f1 ())
+  | TioRandom ->
+      if Random.bool() then (f1 (), f2 ())
+      else swap (f2 (), f1 ())
 
 let label_of_kind kind =
   if kind = "record" then "field" else "constructor"
@@ -3270,7 +3282,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let subtypes = List.map (fun _ -> newgenvar ()) sexpl in
       let to_unify = newgenty (Ttuple subtypes) in
       unify_exp_types loc env to_unify ty_expected;
-      let aexpl = wrap_list_map2 (fun body ty ->
+      let aexpl = wrap_type_check_list (fun body ty ->
           annotate_type_exp (fun () ->
               type_expect env body ty)) sexpl subtypes in
       let expl = extract_typed_exprs aexpl in
@@ -3511,10 +3523,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
             exp_attributes = sexp.pexp_attributes;
             exp_env = env }
       | Some sifnot ->
-          let aifso = annotate_type_exp (fun () ->
+          let tifso () = annotate_type_exp (fun () ->
               type_expect env sifso ty_expected) in
-          let aifnot = annotate_type_exp (fun () ->
+          let tifnot () = annotate_type_exp (fun () ->
               type_expect env sifnot ty_expected) in
+          let aifso, aifnot = wrap_type_check_pair tifso tifnot in
           let _ = report_type_error [aifso; aifnot] in
           let ifso = extract_typed_expr aifso in
           let ifnot = extract_typed_expr aifnot in
@@ -5194,7 +5207,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
       pat_list
   in
   let aexp_list =
-    wrap_list_map2 (fun {pvb_expr=sexp; pvb_attributes; _} (pat, slot) ->
+    wrap_type_check_list (fun {pvb_expr=sexp; pvb_attributes; _} (pat, slot) ->
         annotate_type_exp (fun () ->
             let sexp =
               if rec_flag = Recursive then wrap_unpacks sexp unpacks else sexp in
