@@ -473,16 +473,6 @@ let get_type_infer_order () =
   else if !Clflags.type_infer_order_random then TioRandom
   else TioLeftRight
 
-let rec shuffle_list xs =
-  if List.length xs <= 1 then xs
-  else
-    let _ = Random.self_init() in
-    let (xs1, xs2) =
-      List.partition (fun _ -> Random.bool ()) xs in
-    List.rev_append (shuffle_list xs1) (shuffle_list xs2)
-
-let swap_pair (x, y) = (y, x)
-
 let wrap_type_infer_one_exp finfer =
   let aexp = annotate_type_exp finfer in
   let _ = report_type_error [aexp] in
@@ -490,8 +480,30 @@ let wrap_type_infer_one_exp finfer =
   let _ = backtrack_report_other_error_by_need [exp] in
   exp
 
+let wrap_type_infer_pair_exp finfer1 finfer2 =
+  let swap_pair (x, y) = (y, x) in
+  let aexp1, aexp2 = match get_type_infer_order () with
+    | TioLeftRight ->
+        (annotate_type_exp finfer1, annotate_type_exp finfer2)
+    | TioRightLeft ->
+        swap_pair (annotate_type_exp finfer2, annotate_type_exp finfer1)
+    | TioRandom ->
+        if Random.bool() then
+          (annotate_type_exp finfer1, annotate_type_exp finfer2)
+        else swap_pair (annotate_type_exp finfer2, annotate_type_exp finfer1) in
+  let _ = report_type_error [aexp1; aexp2] in
+  let exp1, exp2 = extract_typed_expr_pair (aexp1, aexp2) in
+  let _ = backtrack_report_other_error_by_need [exp1; exp2] in
+  (exp1, exp2)
+
 let wrap_type_infer_list_exp finfers =
-  (* infer and annotate type *)
+  let rec shuffle_list xs =
+    if List.length xs <= 1 then xs
+    else
+      let _ = Random.self_init() in
+      let (xs1, xs2) =
+        List.partition (fun _ -> Random.bool ()) xs in
+      List.rev_append (shuffle_list xs1) (shuffle_list xs2) in
   let aexpl = match get_type_infer_order () with
     | TioLeftRight ->
         List.map annotate_type_exp finfers
@@ -506,14 +518,6 @@ let wrap_type_infer_list_exp finfers =
   let expl = extract_typed_expr_list aexpl in
   let _ = backtrack_report_other_error_by_need expl in
   expl
-
-let wrap_type_infer_pair f (x1, x2) (t1, t2) =
-  match get_type_infer_order () with
-  | TioLeftRight -> (f x1 t1, f x2 t2)
-  | TioRightLeft -> swap_pair (f x2 t2, f x1 t1)
-  | TioRandom ->
-      if Random.bool() then (f x1 t1, f x2 t2)
-      else swap_pair (f x2 t2, f x1 t1)
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
 
@@ -3523,15 +3527,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
             exp_attributes = sexp.pexp_attributes;
             exp_env = env }
       | Some sifnot ->
-          let aifso, aifnot =
-            wrap_type_infer_pair
-              (fun exp typ ->
-                 annotate_type_exp (fun () -> type_expect env exp typ))
-              (sifso, sifnot) (ty_expected, ty_expected) in
-          let _ = report_type_error [aifso; aifnot] in
-          let ifso, ifnot = extract_typed_expr_pair (aifso, aifnot) in
+          let ifso, ifnot =
+            wrap_type_infer_pair_exp
+              (fun () -> type_expect env sifso ty_expected)
+              (fun () -> type_expect env sifnot ty_expected) in
           unify_exp env ifso ifnot.exp_type;
-          let _ = backtrack_report_other_error_by_need [ifso; ifnot] in
           re {
             exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
             exp_loc = loc; exp_extra = [];
