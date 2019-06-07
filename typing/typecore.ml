@@ -114,45 +114,6 @@ let continue_report_type_errors = ref true
 let report_one_type_error_at_a_time = ref false
 let num_type_error = ref 0
 
-let get_type_infer_order () =
-  if !Clflags.type_infer_order_right then TioRightLeft
-  else if !Clflags.type_infer_order_random then TioRandom
-  else TioLeftRight
-
-let wrap_type_infer_list f xs ys =
-  let rec shuffle_list = function
-    | [] -> []
-    | [single] -> [single]
-    | list ->
-        let _ = Random.self_init() in
-        let (before, after) =
-          List.partition (fun _ -> Random.bool ()) list in
-        List.rev_append (shuffle_list before) (shuffle_list after) in
-  match get_type_infer_order () with
-  | TioLeftRight ->
-      List.map2 f xs ys
-  | TioRightLeft ->
-      let xs', ys' = List.rev xs, List.rev ys in
-      List.rev_map2 f xs' ys'
-  | TioRandom ->
-      let xyis, _ = List.fold_left2 (fun acc x y ->
-          let axyis, ai = acc in
-          (axyis @ [(x,y,ai)], ai + 1)) ([], 0) xs ys in
-      let rs = shuffle_list xyis in
-      let rs = List.map (fun (x,y,i) -> (f x y, i)) rs in
-      let rs = List.sort (fun (_,i1) (_,i2) -> i1 - i2) rs in
-      fst (List.split rs)
-
-let swap_pair (x, y) = (y, x)
-
-let wrap_type_infer_pair f (x1, x2) (t1, t2) =
-  match get_type_infer_order () with
-  | TioLeftRight -> (f x1 t1, f x2 t2)
-  | TioRightLeft -> swap_pair (f x2 t2, f x1 t1)
-  | TioRandom ->
-      if Random.bool() then (f x1 t1, f x2 t2)
-      else swap_pair (f x2 t2, f x1 t1)
-
 let label_of_kind kind =
   if kind = "record" then "field" else "constructor"
 
@@ -426,15 +387,6 @@ let report_error env ppf = function
 let report_error env ppf err =
   wrap_printing_env env (fun () -> report_error env ppf err)
 
-(* let annotate_type_exp f =
- *   try
- *     TypeOK (f ())
- *   with
- *   | Error (loc, env, error) ->
- *       TypeError (loc, env, error)
- *   | Location.Already_displayed_error when error_mode () != ErmSingleError ->
- *       TypeIll *)
-
 let annotate_type_exp f =
   try TypeOK (f ())
   with
@@ -515,6 +467,53 @@ let has_ill_type_exp expl =
 let backtrack_report_other_error_by_need expl =
   if error_mode () = ErmInherited && has_ill_type_exp expl then
     raise Location.Already_displayed_error
+
+let get_type_infer_order () =
+  if !Clflags.type_infer_order_right then TioRightLeft
+  else if !Clflags.type_infer_order_random then TioRandom
+  else TioLeftRight
+
+let rec shuffle_list xs =
+  if List.length xs <= 1 then xs
+  else
+    let _ = Random.self_init() in
+    let (xs1, xs2) =
+      List.partition (fun _ -> Random.bool ()) xs in
+    List.rev_append (shuffle_list xs1) (shuffle_list xs2)
+
+let swap_pair (x, y) = (y, x)
+
+let wrap_type_infer_one_exp finfer =
+  let aexp = annotate_type_exp finfer in
+  let _ = report_type_error [aexp] in
+  let exp = extract_typed_expr aexp in
+  let _ = backtrack_report_other_error_by_need [exp] in
+  exp
+
+let wrap_type_infer_list_exp finfers =
+  (* infer and annotate type *)
+  let aexpl = match get_type_infer_order () with
+    | TioLeftRight ->
+        List.map annotate_type_exp finfers
+    | TioRightLeft ->
+        List.rev_map annotate_type_exp (List.rev finfers)
+    | TioRandom ->
+        finfers |> List.mapi (fun i f -> (f, i)) |> shuffle_list |>
+        List.map (fun (finfer, id) -> (annotate_type_exp finfer, id)) |>
+        List.sort (fun (_, id1) (_, id2) -> id1 - id2) |>
+        List.split |> fst in
+  let _ = report_type_error aexpl in
+  let expl = extract_typed_expr_list aexpl in
+  let _ = backtrack_report_other_error_by_need expl in
+  expl
+
+let wrap_type_infer_pair f (x1, x2) (t1, t2) =
+  match get_type_infer_order () with
+  | TioLeftRight -> (f x1 t1, f x2 t2)
+  | TioRightLeft -> swap_pair (f x2 t2, f x1 t1)
+  | TioRandom ->
+      if Random.bool() then (f x1 t1, f x2 t2)
+      else swap_pair (f x2 t2, f x1 t1)
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
 
@@ -3163,15 +3162,10 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         | _, Recursive -> Some (Annot.Idef loc)
         | _, Nonrecursive -> Some (Annot.Idef sbody.pexp_loc)
       in
-      let (pat_exp_list, new_env, unpacks, aexpl) =
+      let (pat_exp_list, new_env, unpacks) =
         type_let env rec_flag spat_sexp_list scp true in
-      let _ = report_type_error aexpl in
-      let expl = extract_typed_expr_list aexpl in
-      let _ = backtrack_report_other_error_by_need expl in
-      let abody = annotate_type_exp (fun () ->
+      let body = wrap_type_infer_one_exp (fun () ->
           type_expect new_env (wrap_unpacks sbody unpacks) ty_expected) in
-      let _ = report_type_error [abody] in
-      let body = extract_typed_expr abody in
       let () = if rec_flag = Recursive then
           check_recursive_bindings env pat_exp_list in
       re {
@@ -3296,12 +3290,9 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       let subtypes = List.map (fun _ -> newgenvar ()) sexpl in
       let to_unify = newgenty (Ttuple subtypes) in
       unify_exp_types loc env to_unify ty_expected;
-      let aexpl =
-        wrap_type_infer_list (fun exp typ ->
-            annotate_type_exp (fun () ->
-                type_expect env exp typ)) sexpl subtypes in
-      let _ = report_type_error aexpl in
-      let expl = extract_typed_expr_list aexpl in
+      let finfer_expl = List.map2 (fun body ty ->
+          (fun () -> type_expect env body ty)) sexpl subtypes in
+      let expl = wrap_type_infer_list_exp finfer_expl in
       re {
         exp_desc = Texp_tuple expl;
         exp_loc = loc; exp_extra = [];
@@ -3519,20 +3510,12 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
   | Pexp_ifthenelse(scond, sifso, sifnot) ->
-      let acond =
-        annotate_type_exp (fun () ->
+      let cond = wrap_type_infer_one_exp (fun () ->
           type_expect env scond Predef.type_bool) in
-      let _ = report_type_error [acond] in
-      let cond = extract_typed_expr acond in
-      let _ = backtrack_report_other_error_by_need [cond] in
       begin match sifnot with
         None ->
-          let aifso =
-            annotate_type_exp (fun () ->
-              type_expect env sifso Predef.type_unit) in
-          let _ = report_type_error [aifso] in
-          let ifso = extract_typed_expr aifso in
-          let _ = backtrack_report_other_error_by_need [ifso] in
+          let ifso = wrap_type_infer_one_exp (fun () ->
+                type_expect env sifso Predef.type_unit) in
           rue {
             exp_desc = Texp_ifthenelse(cond, ifso, None);
             exp_loc = loc; exp_extra = [];
@@ -5223,33 +5206,34 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
       attrs_list
       pat_list
   in
-  let aexp_list =
-    wrap_type_infer_list (fun {pvb_expr=sexp; pvb_attributes; _} (pat, slot) ->
-        annotate_type_exp (fun () ->
-            let sexp =
-              if rec_flag = Recursive then wrap_unpacks sexp unpacks else sexp in
-            if is_recursive then current_slot := slot;
-            match pat.pat_type.desc with
-            | Tpoly (ty, tl) ->
-                begin_def ();
-                if !Clflags.principal then begin_def ();
-                let vars, ty' = instance_poly ~keep_names:true true tl ty in
-                if !Clflags.principal then begin
-                  end_def ();
-                  generalize_structure ty'
-                end;
-                let exp =
-                  Builtin_attributes.warning_scope pvb_attributes
-                    (fun () -> type_expect exp_env sexp ty')
-                in
-                end_def ();
-                check_univars env true "definition" exp pat.pat_type vars;
-                {exp with exp_type = instance env exp.exp_type}
-            | _ ->
+  let finfer_exp_list =
+    List.map2
+      (fun {pvb_expr=sexp; pvb_attributes; _} (pat, slot) ->
+         let sexp =
+           if rec_flag = Recursive then wrap_unpacks sexp unpacks else sexp in
+         if is_recursive then current_slot := slot;
+         match pat.pat_type.desc with
+         | Tpoly (ty, tl) ->
+             begin_def ();
+             if !Clflags.principal then begin_def ();
+             let vars, ty' = instance_poly ~keep_names:true true tl ty in
+             if !Clflags.principal then begin
+               end_def ();
+               generalize_structure ty'
+             end;
+             let exp =
+               Builtin_attributes.warning_scope pvb_attributes
+                 (fun () -> type_expect exp_env sexp ty')
+             in
+             end_def ();
+             check_univars env true "definition" exp pat.pat_type vars;
+             (fun () -> {exp with exp_type = instance env exp.exp_type})
+         | _ ->
+             (fun () ->
                 Builtin_attributes.warning_scope pvb_attributes (fun () ->
-                    type_expect exp_env sexp pat.pat_type)))
+                  type_expect exp_env sexp pat.pat_type)))
       spat_sexp_list pat_slot_list in
-  let exp_list = extract_typed_expr_list aexp_list in
+  let exp_list = wrap_type_infer_list_exp finfer_exp_list in
   current_slot := None;
   if is_recursive && not !rec_needed
   && Warnings.is_active Warnings.Unused_rec_flag then begin
@@ -5295,13 +5279,13 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
          | Tpat_alias ({pat_desc=Tpat_any}, _, _) -> ()
          | _ -> raise(Error(pat.pat_loc, env, Illegal_letrec_pat)))
       l;
-  (l, new_env, unpacks, aexp_list)
+  (l, new_env, unpacks)
 
 (* Typing of toplevel bindings *)
 
 let type_binding env rec_flag spat_sexp_list scope =
   Typetexp.reset_type_variables();
-  let (pat_exp_list, new_env, _unpacks, _) =
+  let (pat_exp_list, new_env, _unpacks) =
     type_let
       ~check:(fun s -> Warnings.Unused_value_declaration s)
       ~check_strict:(fun s -> Warnings.Unused_value_declaration s)
@@ -5310,7 +5294,7 @@ let type_binding env rec_flag spat_sexp_list scope =
   (pat_exp_list, new_env)
 
 let type_let env rec_flag spat_sexp_list scope =
-  let (pat_exp_list, new_env, _unpacks, _) =
+  let (pat_exp_list, new_env, _unpacks) =
     type_let env rec_flag spat_sexp_list scope false in
   (pat_exp_list, new_env)
 
