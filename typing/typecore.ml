@@ -120,14 +120,14 @@ let get_type_infer_order () =
   else TioLeftRight
 
 let wrap_type_infer_list f xs ys =
-  let rec shuffle = function
+  let rec shuffle_list = function
     | [] -> []
     | [single] -> [single]
     | list ->
         let _ = Random.self_init() in
         let (before, after) =
           List.partition (fun _ -> Random.bool ()) list in
-        List.rev_append (shuffle before) (shuffle after) in
+        List.rev_append (shuffle_list before) (shuffle_list after) in
   match get_type_infer_order () with
   | TioLeftRight ->
       List.map2 f xs ys
@@ -138,7 +138,7 @@ let wrap_type_infer_list f xs ys =
       let xyis, _ = List.fold_left2 (fun acc x y ->
           let axyis, ai = acc in
           (axyis @ [(x,y,ai)], ai + 1)) ([], 0) xs ys in
-      let rs = shuffle xyis in
+      let rs = shuffle_list xyis in
       let rs = List.map (fun (x,y,i) -> (f x y, i)) rs in
       let rs = List.sort (fun (_,i1) (_,i2) -> i1 - i2) rs in
       fst (List.split rs)
@@ -444,6 +444,7 @@ let annotate_type_exp f =
 
 let report_type_error aexpl =
   let report_one_error loc env error =
+    let _ = fprintf std_formatter "\n" in
     let _ = Location.print_error std_formatter loc in
     let _ = fprintf std_formatter " " in
     let _ = report_error env std_formatter error in
