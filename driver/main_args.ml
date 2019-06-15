@@ -609,20 +609,20 @@ let mk_dtypedtree f =
   "-dtypedtree", Arg.Unit f, " (undocumented)"
 ;;
 
-let mk_type_error_inherited f =
-  "-type-error-inherited", Arg.Unit f, " Print type errors (inherited)"
+let mk_multi_type_errors f =
+  "-multi-type-errors", Arg.Unit f, " Report multiple type errors"
 ;;
 
-let mk_type_error_synthesized f =
-  "-type-error-synthesized", Arg.Unit f, " Print type errors (synthesized)"
+let mk_type_infer_left_to_right f =
+  "-type-infer-left-to-right", Arg.Unit f, " Type inference left-to-right"
 ;;
 
-let mk_type_infer_order_right f =
-  "-type-infer-order-right", Arg.Unit f, " Type check from the right to left"
+let mk_type_infer_right_to_left f =
+  "-type-infer-right-to-left", Arg.Unit f, " Type inference right-to-left"
 ;;
 
-let mk_type_infer_order_random f =
-  "-type-infer-order-random", Arg.Unit f, " Type check in random order"
+let mk_type_infer_random_order f =
+  "-type-infer-random-order", Arg.Unit f, " Type inference in random order"
 ;;
 
 let mk_drawlambda f =
@@ -828,10 +828,10 @@ module type Common_options = sig
   val _dsource : unit -> unit
   val _dparsetree : unit -> unit
   val _dtypedtree : unit -> unit
-  val _type_error_inherited : unit -> unit
-  val _type_error_synthesized : unit -> unit
-  val _type_infer_order_right : unit -> unit
-  val _type_infer_order_random : unit -> unit
+  val _multi_type_errors : unit -> unit
+  val _type_infer_left_to_right : unit -> unit
+  val _type_infer_right_to_left : unit -> unit
+  val _type_infer_random_order : unit -> unit
   val _drawlambda : unit -> unit
   val _dlambda : unit -> unit
 
@@ -1105,10 +1105,10 @@ struct
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
-    mk_type_error_inherited F._type_error_inherited;
-    mk_type_error_synthesized F._type_error_synthesized;
-    mk_type_infer_order_right F._type_infer_order_right;
-    mk_type_infer_order_random F._type_infer_order_random;
+    mk_multi_type_errors F._multi_type_errors;
+    mk_type_infer_left_to_right F._type_infer_left_to_right;
+    mk_type_infer_right_to_left F._type_infer_right_to_left;
+    mk_type_infer_random_order F._type_infer_random_order;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_dinstr F._dinstr;
@@ -1166,10 +1166,10 @@ struct
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
-    mk_type_error_inherited F._type_error_inherited;
-    mk_type_error_synthesized F._type_error_synthesized;
-    mk_type_infer_order_right F._type_infer_order_right;
-    mk_type_infer_order_random F._type_infer_order_random;
+    mk_multi_type_errors F._multi_type_errors;
+    mk_type_infer_left_to_right F._type_infer_left_to_right;
+    mk_type_infer_right_to_left F._type_infer_right_to_left;
+    mk_type_infer_random_order F._type_infer_random_order;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_dinstr F._dinstr;
@@ -1285,10 +1285,10 @@ struct
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
-    mk_type_error_inherited F._type_error_inherited;
-    mk_type_error_synthesized F._type_error_synthesized;
-    mk_type_infer_order_right F._type_infer_order_right;
-    mk_type_infer_order_random F._type_infer_order_random;
+    mk_multi_type_errors F._multi_type_errors;
+    mk_type_infer_left_to_right F._type_infer_left_to_right;
+    mk_type_infer_right_to_left F._type_infer_right_to_left;
+    mk_type_infer_random_order F._type_infer_random_order;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_drawclambda F._drawclambda;
@@ -1392,10 +1392,10 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
-    mk_type_error_inherited F._type_error_inherited;
-    mk_type_error_synthesized F._type_error_synthesized;
-    mk_type_infer_order_right F._type_infer_order_right;
-    mk_type_infer_order_random F._type_infer_order_random;
+    mk_multi_type_errors F._multi_type_errors;
+    mk_type_infer_left_to_right F._type_infer_left_to_right;
+    mk_type_infer_right_to_left F._type_infer_right_to_left;
+    mk_type_infer_random_order F._type_infer_random_order;
     mk_drawlambda F._drawlambda;
     mk_drawclambda F._drawclambda;
     mk_dclambda F._dclambda;

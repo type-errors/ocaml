@@ -24,17 +24,12 @@ open Btype
 open Ctype
 
 type error_reporting_mode =
-  | ErmSingleError
-  | ErmInherited
-  | ErmSynthesized
+  | SingleError
+  | MultiTypeErrors
 
 let error_mode () =
-  if !Clflags.type_error_inherited && !Clflags.type_error_synthesized then
-    let _ = print_endline "Error: conflict error reporting mode!" in
-    raise (Failure "Conflict error reporting mode")
-  else if !Clflags.type_error_inherited then ErmInherited
-  else if !Clflags.type_error_synthesized then ErmSynthesized
-  else ErmSingleError
+  if !Clflags.multi_type_errors then MultiTypeErrors
+  else SingleError
 
 type error =
     Polymorphic_label of Longident.t
@@ -99,20 +94,17 @@ exception Error_forward of Location.error
 
 (* TRUNG: function to show type errors *)
 
-type type_result =
-  | TypedExp of expression
-  | TypeError of (Location.t * Env.t * error)
-  | TypeIll
+(* type type_result =
+ *   | TypedExp of expression
+ *   | TypeError of (Location.t * Env.t * error)
+ *   | TypeIll *)
 
 type type_infer_order =
-  | TioLeftRight
-  | TioRightLeft
-  | TioRandom
+  | LeftToRight
+  | RightToLeft
+  | RandomOrder
 
 let already_report_some_type_errors = ref false
-let continue_report_type_errors = ref true
-let report_one_type_error_at_a_time = ref false
-let num_type_error = ref 0
 
 let label_of_kind kind =
   if kind = "record" then "field" else "constructor"
@@ -387,49 +379,6 @@ let report_error env ppf = function
 let report_error env ppf err =
   wrap_printing_env env (fun () -> report_error env ppf err)
 
-let apply_thunk finfer =
-  try TypedExp (finfer ()) with
-  | Error (loc, env, error) ->
-      TypeError (loc, env, error)
-  | Location.Already_displayed_error when error_mode () != ErmSingleError ->
-      TypeIll
-
-let report_all_type_errors aexpl =
-  let report_one_error loc env error =
-    let _ = fprintf std_formatter "\n" in
-    let _ = Location.print_error std_formatter loc in
-    let _ = fprintf std_formatter " " in
-    let _ = report_error env std_formatter error in
-    let _ = num_type_error := !num_type_error + 1 in
-    print_string "\n" in
-  let rec report aexpl = match aexpl with
-    | [] -> ()
-    | (TypedExp _)::aexpl -> report aexpl
-    | (TypeIll)::aexpl -> report aexpl
-    | (TypeError (loc, env, err))::aexpl ->
-        if error_mode () = ErmSingleError then (
-          let _ = report_one_error loc env err in
-          raise Location.Already_displayed_error);
-        if !already_report_some_type_errors &&
-           !continue_report_type_errors &&
-           !report_one_type_error_at_a_time then (
-          print_string "\nDo you want to see other type error? [y/n]: ";
-          let answer = String.trim (read_line ()) in
-          if String.compare answer "y" = 0 then print_endline ""
-          else continue_report_type_errors := false);
-        if !continue_report_type_errors then (
-          let _ = report_one_error loc env err in
-          let _ = already_report_some_type_errors := true in
-          report aexpl ) in
-  (* report errors *)
-  let _ = report aexpl in
-  let has_error = List.exists (function
-      | TypeError _ | TypeIll  -> true
-      | _ -> false) aexpl in
-  let _ = if error_mode () = ErmInherited && has_error then
-      raise Location.Already_displayed_error in
-  ()
-
 let mk_ill_typed_exp env loc =
   let typ = {desc = Tnil; level = 0; id = 0} in
   { exp_desc = Texp_nil;
@@ -439,51 +388,78 @@ let mk_ill_typed_exp env loc =
     exp_env = env;
     exp_attributes = []; }
 
-let extract_typed_expr aexp = match aexp with
-  | TypedExp e -> e
-  | TypeError (loc, env, _) -> mk_ill_typed_exp env loc
-  | TypeIll -> mk_ill_typed_exp Env.empty Location.none
+let apply_thunk finfer =
+  try finfer () with
+  | Error (loc, env, error) when error_mode () != SingleError ->
+      let _ = fprintf std_formatter "\n" in
+      let _ = Location.print_error std_formatter loc in
+      let _ = fprintf std_formatter " " in
+      let _ = report_error env std_formatter error in
+      let _ = fprintf std_formatter "\n" in
+      mk_ill_typed_exp env loc
+  | Location.Already_displayed_error when error_mode () != SingleError ->
+      mk_ill_typed_exp Env.empty Location.none
 
-let extract_typed_expr_list aexpl =
-  List.map extract_typed_expr aexpl
-
-let is_ill_typed_exp exp =
-  exp.exp_type.desc = Tnil
-
-let has_ill_type_exp expl =
-  List.exists is_ill_typed_exp expl
-
-let backtrack_on_type_error expl =
-  if error_mode () = ErmInherited && has_ill_type_exp expl then
-    raise Location.Already_displayed_error
+(* let report_all_type_errors aexpl =
+ *   let report_one_error loc env error =
+ *     let _ = num_type_error := !num_type_error + 1 in
+ *     print_string "\n" in
+ *   let rec report aexpl = match aexpl with
+ *     | [] -> ()
+ *     | (TypedExp _)::aexpl -> report aexpl
+ *     | (TypeIll)::aexpl -> report aexpl
+ *     | (TypeError (loc, env, err))::aexpl ->
+ *         if error_mode () = SingleError then (
+ *           let _ = report_one_error loc env err in
+ *           raise Location.Already_displayed_error);
+ *         if !already_report_some_type_errors &&
+ *            !continue_report_type_errors &&
+ *            !report_one_type_error_at_a_time then (
+ *           print_string "\nDo you want to see other type error? [y/n]: ";
+ *           let answer = String.trim (read_line ()) in
+ *           if String.compare answer "y" = 0 then print_endline ""
+ *           else continue_report_type_errors := false);
+ *         if !continue_report_type_errors then (
+ *           let _ = report_one_error loc env err in
+ *           let _ = already_report_some_type_errors := true in
+ *           report aexpl ) in
+ *   (\* report errors *\)
+ *   let _ = report aexpl in
+ *   let has_error = List.exists (function
+ *       | TypeError _ | TypeIll  -> true
+ *       | _ -> false) aexpl in
+ *   let _ = if error_mode () = ErmInherited && has_error then
+ *       raise Location.Already_displayed_error in
+ *   () *)
 
 let get_type_infer_order () =
-  if !Clflags.type_infer_order_right then TioRightLeft
-  else if !Clflags.type_infer_order_random then TioRandom
-  else TioLeftRight
+  if !Clflags.type_infer_left_to_right then LeftToRight
+  else if !Clflags.type_infer_right_to_left then RightToLeft
+  else if !Clflags.type_infer_random_order then RandomOrder
+  else LeftToRight
 
 let wrap_type_infer_exp finfer =
-  let aexp = apply_func_infer finfer in
-  let _ = report_all_type_errors [aexp] in
-  let exp = extract_typed_expr aexp in
-  let _ = backtrack_on_type_error [exp] in
-  exp
+  apply_thunk finfer
 
 let wrap_type_infer_pair finfer1 finfer2 =
-  let swap_pair (x, y) = (y, x) in
-  let aexp1, aexp2 = match get_type_infer_order () with
-    | TioLeftRight ->
-        (apply_func_infer finfer1, apply_func_infer finfer2)
-    | TioRightLeft ->
-        swap_pair (apply_func_infer finfer2, apply_func_infer finfer1)
-    | TioRandom ->
-        if Random.bool() then
-          (apply_func_infer finfer1, apply_func_infer finfer2)
-        else swap_pair (apply_func_infer finfer2, apply_func_infer finfer1) in
-  let _ = report_all_type_errors [aexp1; aexp2] in
-  let exp1, exp2 = extract_typed_expr aexp1, extract_typed_expr aexp2 in
-  let _ = backtrack_on_type_error [exp1; exp2] in
-  (exp1, exp2)
+  match get_type_infer_order () with
+  | LeftToRight ->
+      let e1 = apply_thunk finfer1 in
+      let e2 = apply_thunk finfer2 in
+      (e1, e2)
+  | RightToLeft ->
+      let e2 = apply_thunk finfer2 in
+      let e1 = apply_thunk finfer1 in
+      (e1, e2)
+  | RandomOrder ->
+      if Random.bool() then
+        let e1 = apply_thunk finfer1 in
+        let e2 = apply_thunk finfer2 in
+        (e1, e2)
+      else
+        let e2 = apply_thunk finfer2 in
+        let e1 = apply_thunk finfer1 in
+        (e1, e2)
 
 let wrap_type_infer_list finfers =
   let rec shuffle_list xs =
@@ -493,20 +469,16 @@ let wrap_type_infer_list finfers =
       let (xs1, xs2) =
         List.partition (fun _ -> Random.bool ()) xs in
       List.rev_append (shuffle_list xs1) (shuffle_list xs2) in
-  let aexpl = match get_type_infer_order () with
-    | TioLeftRight ->
-        List.map apply_func_infer finfers
-    | TioRightLeft ->
-        List.rev_map apply_func_infer (List.rev finfers)
-    | TioRandom ->
-        finfers |> List.mapi (fun i f -> (f, i)) |> shuffle_list |>
-        List.map (fun (finfer, id) -> (apply_func_infer finfer, id)) |>
-        List.sort (fun (_, id1) (_, id2) -> id1 - id2) |>
-        List.split |> fst in
-  let _ = report_all_type_errors aexpl in
-  let expl = extract_typed_expr_list aexpl in
-  let _ = backtrack_on_type_error expl in
-  expl
+  match get_type_infer_order () with
+  | LeftToRight ->
+      List.map apply_thunk finfers
+  | RightToLeft ->
+      List.rev_map apply_thunk (List.rev finfers)
+  | RandomOrder ->
+      finfers |> List.mapi (fun i f -> (f, i)) |> shuffle_list |>
+      List.map (fun (finfer, id) -> (apply_thunk finfer, id)) |>
+      List.sort (fun (_, id1) (_, id2) -> id1 - id2) |>
+      List.split |> fst
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
 
