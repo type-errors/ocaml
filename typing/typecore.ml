@@ -3439,12 +3439,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
   | Pexp_ifthenelse(scond, sifso, sifnot) ->
-      let thunk_cond () = type_expect env scond Predef.type_bool in
-      let cond = infer_one_exp thunk_cond in
+      let thunk1 () = type_expect env scond Predef.type_bool in
       begin match sifnot with
         None ->
-          let thunk_ifso () = type_expect env sifso Predef.type_unit in
-          let ifso = infer_one_exp thunk_ifso in
+          let thunk2 () = type_expect env sifso Predef.type_unit in
+          let cond, ifso = infer_pair_exps thunk1 thunk2 in
           rue {
             exp_desc = Texp_ifthenelse(cond, ifso, None);
             exp_loc = loc; exp_extra = [];
@@ -3452,9 +3451,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
             exp_attributes = sexp.pexp_attributes;
             exp_env = env }
       | Some sifnot ->
-          let thunk_ifso () = type_expect env sifso ty_expected in
-          let thunk_ifnot () = type_expect env sifnot ty_expected in
-          let ifso, ifnot = infer_pair_exps thunk_ifso thunk_ifnot in
+          let thunk2 () = type_expect env sifso ty_expected in
+          let thunk3 () = type_expect env sifnot ty_expected in
+          let exps = infer_list_exps [thunk1; thunk2; thunk3] in
+          let cond = List.hd exps in
+          let ifso, ifnot = List.nth exps 1, List.nth exps 2 in
           unify_exp env ifso ifnot.exp_type;
           re {
             exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
