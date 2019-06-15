@@ -388,7 +388,7 @@ let mk_ill_typed_exp env loc =
     exp_env = env;
     exp_attributes = []; }
 
-let apply_thunk finfer =
+let infer_type finfer =
   try finfer () with
   | Error (loc, env, error) when error_mode () != SingleError ->
       let _ = fprintf std_formatter "\n" in
@@ -396,41 +396,10 @@ let apply_thunk finfer =
       let _ = fprintf std_formatter " " in
       let _ = report_error env std_formatter error in
       let _ = fprintf std_formatter "\n" in
+      let _ = already_report_some_type_errors := true in
       mk_ill_typed_exp env loc
   | Location.Already_displayed_error when error_mode () != SingleError ->
       mk_ill_typed_exp Env.empty Location.none
-
-(* let report_all_type_errors aexpl =
- *   let report_one_error loc env error =
- *     let _ = num_type_error := !num_type_error + 1 in
- *     print_string "\n" in
- *   let rec report aexpl = match aexpl with
- *     | [] -> ()
- *     | (TypedExp _)::aexpl -> report aexpl
- *     | (TypeIll)::aexpl -> report aexpl
- *     | (TypeError (loc, env, err))::aexpl ->
- *         if error_mode () = SingleError then (
- *           let _ = report_one_error loc env err in
- *           raise Location.Already_displayed_error);
- *         if !already_report_some_type_errors &&
- *            !continue_report_type_errors &&
- *            !report_one_type_error_at_a_time then (
- *           print_string "\nDo you want to see other type error? [y/n]: ";
- *           let answer = String.trim (read_line ()) in
- *           if String.compare answer "y" = 0 then print_endline ""
- *           else continue_report_type_errors := false);
- *         if !continue_report_type_errors then (
- *           let _ = report_one_error loc env err in
- *           let _ = already_report_some_type_errors := true in
- *           report aexpl ) in
- *   (\* report errors *\)
- *   let _ = report aexpl in
- *   let has_error = List.exists (function
- *       | TypeError _ | TypeIll  -> true
- *       | _ -> false) aexpl in
- *   let _ = if error_mode () = ErmInherited && has_error then
- *       raise Location.Already_displayed_error in
- *   () *)
 
 let get_type_infer_order () =
   if !Clflags.type_infer_left_to_right then LeftToRight
@@ -438,30 +407,26 @@ let get_type_infer_order () =
   else if !Clflags.type_infer_random_order then RandomOrder
   else LeftToRight
 
-let wrap_type_infer_exp finfer =
-  apply_thunk finfer
+let infer_one_exp finfer =
+  infer_type finfer
 
-let wrap_type_infer_pair finfer1 finfer2 =
+let infer_pair_exps finfer1 finfer2 =
+  let infer_left_to_right f1 f2 =
+    let e1 = infer_type f1 in
+    let e2 = infer_type f2 in
+    (e1, e2) in
+  let infer_right_to_left f1 f2 =
+    let e2 = infer_type f2 in
+    let e1 = infer_type f1 in
+    (e1, e2) in
   match get_type_infer_order () with
-  | LeftToRight ->
-      let e1 = apply_thunk finfer1 in
-      let e2 = apply_thunk finfer2 in
-      (e1, e2)
-  | RightToLeft ->
-      let e2 = apply_thunk finfer2 in
-      let e1 = apply_thunk finfer1 in
-      (e1, e2)
+  | LeftToRight -> infer_left_to_right finfer1 finfer2
+  | RightToLeft -> infer_right_to_left finfer1 finfer2
   | RandomOrder ->
-      if Random.bool() then
-        let e1 = apply_thunk finfer1 in
-        let e2 = apply_thunk finfer2 in
-        (e1, e2)
-      else
-        let e2 = apply_thunk finfer2 in
-        let e1 = apply_thunk finfer1 in
-        (e1, e2)
+      if Random.bool() then infer_left_to_right finfer1 finfer2
+      else infer_right_to_left finfer1 finfer2
 
-let wrap_type_infer_list finfers =
+let infer_list_exps finfers =
   let rec shuffle_list xs =
     if List.length xs <= 1 then xs
     else
@@ -470,13 +435,11 @@ let wrap_type_infer_list finfers =
         List.partition (fun _ -> Random.bool ()) xs in
       List.rev_append (shuffle_list xs1) (shuffle_list xs2) in
   match get_type_infer_order () with
-  | LeftToRight ->
-      List.map apply_thunk finfers
-  | RightToLeft ->
-      List.rev_map apply_thunk (List.rev finfers)
+  | LeftToRight -> List.map infer_type finfers
+  | RightToLeft -> List.rev_map infer_type (List.rev finfers)
   | RandomOrder ->
       finfers |> List.mapi (fun i f -> (f, i)) |> shuffle_list |>
-      List.map (fun (finfer, id) -> (apply_thunk finfer, id)) |>
+      List.map (fun (finfer, id) -> (infer_type finfer, id)) |>
       List.sort (fun (_, id1) (_, id2) -> id1 - id2) |>
       List.split |> fst
 
@@ -3131,7 +3094,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         type_let env rec_flag spat_sexp_list scp true in
       let thunk_body () =
         type_expect new_env (wrap_unpacks sbody unpacks) ty_expected in
-      let body = wrap_type_infer_exp thunk_body in
+      let body = infer_one_exp thunk_body in
       let () = if rec_flag = Recursive then
           check_recursive_bindings env pat_exp_list in
       re {
@@ -3258,7 +3221,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       unify_exp_types loc env to_unify ty_expected;
       let thunk_expl = List.map2 (fun body ty ->
           (fun () -> type_expect env body ty)) sexpl subtypes in
-      let expl = wrap_type_infer_list thunk_expl in
+      let expl = infer_list_exps thunk_expl in
       re {
         exp_desc = Texp_tuple expl;
         exp_loc = loc; exp_extra = [];
@@ -3477,11 +3440,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_env = env }
   | Pexp_ifthenelse(scond, sifso, sifnot) ->
       let thunk_cond () = type_expect env scond Predef.type_bool in
-      let cond = wrap_type_infer_exp thunk_cond in
+      let cond = infer_one_exp thunk_cond in
       begin match sifnot with
         None ->
           let thunk_ifso () = type_expect env sifso Predef.type_unit in
-          let ifso = wrap_type_infer_exp thunk_ifso in
+          let ifso = infer_one_exp thunk_ifso in
           rue {
             exp_desc = Texp_ifthenelse(cond, ifso, None);
             exp_loc = loc; exp_extra = [];
@@ -3491,7 +3454,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       | Some sifnot ->
           let thunk_ifso () = type_expect env sifso ty_expected in
           let thunk_ifnot () = type_expect env sifnot ty_expected in
-          let ifso, ifnot = wrap_type_infer_pair thunk_ifso thunk_ifnot in
+          let ifso, ifnot = infer_pair_exps thunk_ifso thunk_ifnot in
           unify_exp env ifso ifnot.exp_type;
           re {
             exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
@@ -5194,7 +5157,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
                 Builtin_attributes.warning_scope pvb_attributes (fun () ->
                   type_expect exp_env sexp pat.pat_type)))
       spat_sexp_list pat_slot_list in
-  let exp_list = wrap_type_infer_list thunk_exp_list in
+  let exp_list = infer_list_exps thunk_exp_list in
   current_slot := None;
   if is_recursive && not !rec_needed
   && Warnings.is_active Warnings.Unused_rec_flag then begin
