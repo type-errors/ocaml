@@ -388,6 +388,12 @@ let mk_ill_typed_exp env loc =
     exp_env = env;
     exp_attributes = []; }
 
+let is_ill_typed_exp exp =
+  exp.exp_type.desc = Tnil
+
+let has_ill_typed_exp exps =
+  List.exists is_ill_typed_exp exps
+
 let infer_type finfer =
   try finfer () with
   | Error (loc, env, error) when error_mode () != SingleError ->
@@ -3456,7 +3462,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           let exps = infer_list_exps [thunk1; thunk2; thunk3] in
           let cond = List.hd exps in
           let ifso, ifnot = List.nth exps 1, List.nth exps 2 in
-          unify_exp env ifso ifnot.exp_type;
+          let _ = if not (has_ill_typed_exp [ifso; ifnot]) then
+              unify_exp env ifso ifnot.exp_type in
           re {
             exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
             exp_loc = loc; exp_extra = [];
