@@ -419,8 +419,39 @@ let apply_pair_thunk thunk1 thunk2 =
   | LeftToRight -> apply_left_to_right ()
   | RightToLeft -> apply_right_to_left ()
   | RandomOrder ->
+      let _ = Random.self_init() in
       if Random.bool() then apply_left_to_right ()
       else apply_right_to_left ()
+
+let apply_triple_thunk thunk1 thunk2 thunk3 =
+  let apply_left_to_right () =
+    let e1 = apply_thunk thunk1 in
+    let e2 = apply_thunk thunk2 in
+    let e3 = apply_thunk thunk3 in
+    (e1, e2, e3) in
+  let apply_right_to_left () =
+    let e3 = apply_thunk thunk3 in
+    let e2 = apply_thunk thunk2 in
+    let e1 = apply_thunk thunk1 in
+    (e1, e2, e3) in
+  match get_type_infer_order () with
+  | LeftToRight -> apply_left_to_right ()
+  | RightToLeft -> apply_right_to_left ()
+  | RandomOrder ->
+      let _ = Random.self_init() in
+      let random_int = Random.int 3 in
+      if random_int = 0 then
+        let e1 = apply_thunk thunk1 in
+        let e2, e3 = apply_pair_thunk thunk2 thunk3 in
+        (e1, e2, e3)
+      else if random_int = 1 then
+        let e2 = apply_thunk thunk2 in
+        let e1, e3 = apply_pair_thunk thunk1 thunk3 in
+        (e1, e2, e3)
+      else
+        let e3 = apply_thunk thunk3 in
+        let e1, e2 = apply_pair_thunk thunk1 thunk2 in
+        (e1, e2, e3)
 
 let apply_list_thunk thunks =
   let rec shuffle_list xs =
@@ -3437,12 +3468,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
   | Pexp_ifthenelse(scond, sifso, sifnot) ->
-      let thunk_cond () = type_expect env scond Predef.type_bool in
-      let cond = apply_thunk thunk_cond in
+      let thunk1 () = type_expect env scond Predef.type_bool in
       begin match sifnot with
         None ->
-          let thunk_ifso () = type_expect env sifso Predef.type_unit in
-          let ifso = apply_thunk thunk_ifso in
+          let thunk2 () = type_expect env sifso Predef.type_unit in
+          let cond, ifso = apply_pair_thunk thunk1 thunk2 in
           rue {
             exp_desc = Texp_ifthenelse(cond, ifso, None);
             exp_loc = loc; exp_extra = [];
@@ -3450,9 +3480,9 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
             exp_attributes = sexp.pexp_attributes;
             exp_env = env }
       | Some sifnot ->
-          let thunk_ifso () = type_expect env sifso ty_expected in
-          let thunk_ifnot () = type_expect env sifnot ty_expected in
-          let ifso, ifnot = apply_pair_thunk thunk_ifso thunk_ifnot in
+          let thunk2 () = type_expect env sifso ty_expected in
+          let thunk3 () = type_expect env sifnot ty_expected in
+          let cond, ifso, ifnot = apply_triple_thunk thunk1 thunk2 thunk3 in
           unify_exp env ifso ifnot.exp_type;
           re {
             exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
