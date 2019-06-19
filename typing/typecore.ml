@@ -402,6 +402,7 @@ let apply_thunk thunk =
       let _ = fprintf std_formatter " " in
       let _ = report_error env std_formatter error in
       let _ = fprintf std_formatter "\n" in
+      let _ = already_report_some_type_errors := true in
       mk_ill_typed_exp env loc
   | Location.Already_displayed_error when error_mode () != SingleError ->
       mk_ill_typed_exp Env.empty Location.none
