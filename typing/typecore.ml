@@ -422,26 +422,24 @@ let apply_pair_thunk thunk1 thunk2 =
       if Random.bool() then apply_left_to_right ()
       else apply_right_to_left ()
 
-let wrap_type_infer_list finfers =
-  (* let rec shuffle_list xs =
-   *   if List.length xs <= 1 then xs
-   *   else
-   *     let _ = Random.self_init() in
-   *     let (xs1, xs2) =
-   *       List.partition (fun _ -> Random.bool ()) xs in
-   *     List.rev_append (shuffle_list xs1) (shuffle_list xs2) in *)
+let apply_list_thunk thunks =
+  let rec shuffle_list xs =
+    if List.length xs <= 1 then xs
+    else
+      let _ = Random.self_init() in
+      let (xs1, xs2) =
+        List.partition (fun _ -> Random.bool ()) xs in
+      List.rev_append (shuffle_list xs1) (shuffle_list xs2) in
   match get_type_infer_order () with
   | LeftToRight ->
-      List.map apply_thunk finfers
+      List.map apply_thunk thunks
   | RightToLeft ->
-      List.map apply_thunk finfers
-      (* List.rev_map apply_thunk (List.rev finfers) *)
+      List.rev_map apply_thunk (List.rev thunks)
   | RandomOrder ->
-      List.map apply_thunk finfers
-      (* finfers |> List.mapi (fun i f -> (f, i)) |> shuffle_list |>
-       * List.map (fun (thunk, id) -> (apply_thunk thunk, id)) |>
-       * List.sort (fun (_, id1) (_, id2) -> id1 - id2) |>
-       * List.split |> fst *)
+      thunks |> List.mapi (fun i f -> (f, i)) |> shuffle_list |>
+      List.map (fun (thunk, id) -> (apply_thunk thunk, id)) |>
+      List.sort (fun (_, id1) (_, id2) -> id1 - id2) |>
+      List.split |> fst
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
 
@@ -3221,7 +3219,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       unify_exp_types loc env to_unify ty_expected;
       let thunk_expl = List.map2 (fun body ty ->
           (fun () -> type_expect env body ty)) sexpl subtypes in
-      let expl = wrap_type_infer_list thunk_expl in
+      let expl = apply_list_thunk thunk_expl in
       re {
         exp_desc = Texp_tuple expl;
         exp_loc = loc; exp_extra = [];
@@ -5157,7 +5155,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
                 Builtin_attributes.warning_scope pvb_attributes (fun () ->
                   type_expect exp_env sexp pat.pat_type)))
       spat_sexp_list pat_slot_list in
-  let exp_list = wrap_type_infer_list thunk_exp_list in
+  let exp_list = apply_list_thunk thunk_exp_list in
   current_slot := None;
   if is_recursive && not !rec_needed
   && Warnings.is_active Warnings.Unused_rec_flag then begin
