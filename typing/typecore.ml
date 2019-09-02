@@ -5159,35 +5159,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
       attrs_list
       pat_list
   in
-  (* let thunk_exp_list =
-   *   List.map2
-   *     (fun {pvb_expr=sexp; pvb_attributes; _} (pat, slot) ->
-   *        let sexp =
-   *          if rec_flag = Recursive then wrap_unpacks sexp unpacks else sexp in
-   *        if is_recursive then current_slot := slot;
-   *        match pat.pat_type.desc with
-   *        | Tpoly (ty, tl) ->
-   *            begin_def ();
-   *            if !Clflags.principal then begin_def ();
-   *            let vars, ty' = instance_poly ~keep_names:true true tl ty in
-   *            if !Clflags.principal then begin
-   *              end_def ();
-   *              generalize_structure ty'
-   *            end;
-   *            let exp =
-   *              Builtin_attributes.warning_scope pvb_attributes
-   *                (fun () -> type_expect exp_env sexp ty')
-   *            in
-   *            end_def ();
-   *            check_univars env true "definition" exp pat.pat_type vars;
-   *            (fun () -> {exp with exp_type = instance env exp.exp_type})
-   *        | _ ->
-   *            (fun () ->
-   *               Builtin_attributes.warning_scope pvb_attributes (fun () ->
-   *                 type_expect exp_env sexp pat.pat_type)))
-   *     spat_sexp_list pat_slot_list in
-   * let exp_list = apply_list_thunk thunk_exp_list in *)
-  let exp_list =
+  let thunk_exp_list =
     List.map2
       (fun {pvb_expr=sexp; pvb_attributes; _} (pat, slot) ->
          let sexp =
@@ -5208,11 +5180,41 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
              in
              end_def ();
              check_univars env true "definition" exp pat.pat_type vars;
-             {exp with exp_type = instance env exp.exp_type}
+             (fun () -> {exp with exp_type = instance env exp.exp_type}) ()
          | _ ->
-              Builtin_attributes.warning_scope pvb_attributes (fun () ->
-                  type_expect exp_env sexp pat.pat_type))
+             (fun () ->
+                Builtin_attributes.warning_scope pvb_attributes (fun () ->
+                  type_expect exp_env sexp pat.pat_type)) ())
       spat_sexp_list pat_slot_list in
+  let exp_list = thunk_exp_list in
+  (* let exp_list = List.map apply_thunk thunk_exp_list in *)
+  (* let exp_list = apply_list_thunk thunk_exp_list in *)
+  (* let exp_list =
+   *   List.map2
+   *     (fun {pvb_expr=sexp; pvb_attributes; _} (pat, slot) ->
+   *        let sexp =
+   *          if rec_flag = Recursive then wrap_unpacks sexp unpacks else sexp in
+   *        if is_recursive then current_slot := slot;
+   *        match pat.pat_type.desc with
+   *        | Tpoly (ty, tl) ->
+   *            begin_def ();
+   *            if !Clflags.principal then begin_def ();
+   *            let vars, ty' = instance_poly ~keep_names:true true tl ty in
+   *            if !Clflags.principal then begin
+   *              end_def ();
+   *              generalize_structure ty'
+   *            end;
+   *            let exp =
+   *              Builtin_attributes.warning_scope pvb_attributes
+   *                (fun () -> type_expect exp_env sexp ty')
+   *            in
+   *            end_def ();
+   *            check_univars env true "definition" exp pat.pat_type vars;
+   *            {exp with exp_type = instance env exp.exp_type}
+   *        | _ ->
+   *             Builtin_attributes.warning_scope pvb_attributes (fun () ->
+   *                 type_expect exp_env sexp pat.pat_type))
+   *     spat_sexp_list pat_slot_list in *)
   current_slot := None;
   if is_recursive && not !rec_needed
   && Warnings.is_active Warnings.Unused_rec_flag then begin
