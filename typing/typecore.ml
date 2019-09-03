@@ -415,7 +415,7 @@ let apply_thunk thunk =
   | Location.Already_displayed_error when error_mode () != SingleError ->
       mk_ill_typed_exp Env.empty Location.none
 
-let apply_pair_thunk thunk1 thunk2 =
+let apply_thunk_pair thunk1 thunk2 =
   let apply_left_to_right () =
     let e1 = apply_thunk thunk1 in
     let e2 = apply_thunk thunk2 in
@@ -450,7 +450,7 @@ let unshuffle_list (xs: 'a list) (indices: int list) : 'a list =
   List.sort (fun (_, id1) (_, id2) -> id1 - id2) |>
   List.split |> fst
 
-let apply_list_thunk thunks =
+let apply_thunk_list thunks =
   match get_type_infer_order () with
   | LeftToRight ->
       List.map apply_thunk thunks
@@ -3239,7 +3239,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       unify_exp_types loc env to_unify ty_expected;
       let thunk_expl = List.map2 (fun body ty ->
           (fun () -> type_expect env body ty)) sexpl subtypes in
-      let expl = apply_list_thunk thunk_expl in
+      let expl = apply_thunk_list thunk_expl in
       re {
         exp_desc = Texp_tuple expl;
         exp_loc = loc; exp_extra = [];
@@ -3470,7 +3470,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       | Some sifnot ->
           let thunk1 () = type_expect env sifso ty_expected in
           let thunk2 () = type_expect env sifnot ty_expected in
-          let ifso, ifnot = apply_pair_thunk thunk1 thunk2 in
+          let ifso, ifnot = apply_thunk_pair thunk1 thunk2 in
           unify_exp env ifso ifnot.exp_type;
           re {
             exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);

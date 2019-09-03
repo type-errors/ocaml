@@ -1,11 +1,11 @@
 - To compile:
 
-    git clone https://github.com/tddsg/ocaml/
+    git clone https://github.com/type-errors/ocaml/
     cd ocaml
     git fetch
     git checkout 4.06
     ./configure
-    make world
+    make world.opt
 
 - To run OCaml compiler after compilation:
 
