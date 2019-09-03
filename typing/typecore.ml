@@ -432,54 +432,34 @@ let apply_pair_thunk thunk1 thunk2 =
       if Random.bool() then apply_left_to_right ()
       else apply_right_to_left ()
 
-let apply_triple_thunk thunk1 thunk2 thunk3 =
-  let apply_left_to_right () =
-    let e1 = apply_thunk thunk1 in
-    let e2 = apply_thunk thunk2 in
-    let e3 = apply_thunk thunk3 in
-    (e1, e2, e3) in
-  let apply_right_to_left () =
-    let e3 = apply_thunk thunk3 in
-    let e2 = apply_thunk thunk2 in
-    let e1 = apply_thunk thunk1 in
-    (e1, e2, e3) in
-  match get_type_infer_order () with
-  | LeftToRight -> apply_left_to_right ()
-  | RightToLeft -> apply_right_to_left ()
-  | RandomOrder ->
-      let _ = Random.self_init() in
-      let random_int = Random.int 3 in
-      if random_int = 0 then
-        let e1 = apply_thunk thunk1 in
-        let e2, e3 = apply_pair_thunk thunk2 thunk3 in
-        (e1, e2, e3)
-      else if random_int = 1 then
-        let e2 = apply_thunk thunk2 in
-        let e1, e3 = apply_pair_thunk thunk1 thunk3 in
-        (e1, e2, e3)
-      else
-        let e3 = apply_thunk thunk3 in
-        let e1, e2 = apply_pair_thunk thunk1 thunk2 in
-        (e1, e2, e3)
-
-let apply_list_thunk thunks =
-  let rec shuffle_list xs =
-    if List.length xs <= 1 then xs
+let shuffle_list (xs: 'a list) : 'a list * int list =
+  let rec shuffle lst =
+    if List.length lst <= 1 then lst
     else
       let _ = Random.self_init() in
-      let (xs1, xs2) =
-        List.partition (fun _ -> Random.bool ()) xs in
-      List.rev_append (shuffle_list xs1) (shuffle_list xs2) in
+      let (lst1, lst2) =
+        List.partition (fun _ -> Random.bool ()) lst in
+      List.rev_append (shuffle lst1) (shuffle lst2) in
+  let nxs_indices = xs |> List.mapi (fun i x -> (x, i)) |> shuffle in
+  let nxs, indices = List.split nxs_indices in
+  (nxs, indices)
+
+let unshuffle_list (xs: 'a list) (indices: int list) : 'a list =
+  let xs_indices = List.map2 (fun x i -> (x, i)) xs indices in
+  xs_indices |>
+  List.sort (fun (_, id1) (_, id2) -> id1 - id2) |>
+  List.split |> fst
+
+let apply_list_thunk thunks =
   match get_type_infer_order () with
   | LeftToRight ->
       List.map apply_thunk thunks
   | RightToLeft ->
       List.rev_map apply_thunk (List.rev thunks)
   | RandomOrder ->
-      thunks |> List.mapi (fun i f -> (f, i)) |> shuffle_list |>
-      List.map (fun (thunk, id) -> (apply_thunk thunk, id)) |>
-      List.sort (fun (_, id1) (_, id2) -> id1 - id2) |>
-      List.split |> fst
+      let thunks, indices = shuffle_list thunks in
+      let results = List.map apply_thunk thunks in
+      unshuffle_list results indices
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
 
@@ -3477,11 +3457,10 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
   | Pexp_ifthenelse(scond, sifso, sifnot) ->
-      let thunk1 () = type_expect env scond Predef.type_bool in
+      let cond = type_expect env scond Predef.type_bool in
       begin match sifnot with
         None ->
-          let thunk2 () = type_expect env sifso Predef.type_unit in
-          let cond, ifso = apply_pair_thunk thunk1 thunk2 in
+          let ifso = type_expect env sifso Predef.type_unit in
           rue {
             exp_desc = Texp_ifthenelse(cond, ifso, None);
             exp_loc = loc; exp_extra = [];
@@ -3489,9 +3468,9 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
             exp_attributes = sexp.pexp_attributes;
             exp_env = env }
       | Some sifnot ->
-          let thunk2 () = type_expect env sifso ty_expected in
-          let thunk3 () = type_expect env sifnot ty_expected in
-          let cond, ifso, ifnot = apply_triple_thunk thunk1 thunk2 thunk3 in
+          let thunk1 () = type_expect env sifso ty_expected in
+          let thunk2 () = type_expect env sifnot ty_expected in
+          let ifso, ifnot = apply_pair_thunk thunk1 thunk2 in
           unify_exp env ifso ifnot.exp_type;
           re {
             exp_desc = Texp_ifthenelse(cond, ifso, Some ifnot);
@@ -5167,8 +5146,17 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
       attrs_list
       pat_list
   in
-  let thunk_exp_list =
-    List.map2
+  let exp_list =
+    let n_spat_sexp_list, n_pat_slot_list, sexp_indices =
+      match get_type_infer_order () with
+      | LeftToRight -> spat_sexp_list, pat_slot_list, []
+      | RightToLeft -> List.rev spat_sexp_list, List.rev pat_slot_list, []
+      | RandomOrder ->
+          let xys = List.combine spat_sexp_list pat_slot_list in
+          let xys, indices = shuffle_list xys in
+          let xs, ys = List.split xys in
+          (xs, ys, indices) in
+    let n_exp_list = List.map2
       (fun {pvb_expr=sexp; pvb_attributes; _} (pat, slot) ->
          let sexp =
            if rec_flag = Recursive then wrap_unpacks sexp unpacks else sexp in
@@ -5188,40 +5176,16 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
              in
              end_def ();
              check_univars env true "definition" exp pat.pat_type vars;
-             (fun () -> {exp with exp_type = instance env exp.exp_type})
+             {exp with exp_type = instance env exp.exp_type}
          | _ ->
-             (fun () ->
-                Builtin_attributes.warning_scope pvb_attributes (fun () ->
-                  type_expect exp_env sexp pat.pat_type)))
-      spat_sexp_list pat_slot_list in
-   let exp_list = apply_list_thunk thunk_exp_list in
-  (*  let exp_list =
-   *   List.map2
-   *     (fun {pvb_expr=sexp; pvb_attributes; _} (pat, slot) ->
-   *        let sexp =
-   *          if rec_flag = Recursive then wrap_unpacks sexp unpacks else sexp in
-   *        if is_recursive then current_slot := slot;
-   *        match pat.pat_type.desc with
-   *        | Tpoly (ty, tl) ->
-   *            begin_def ();
-   *            if !Clflags.principal then begin_def ();
-   *            let vars, ty' = instance_poly ~keep_names:true true tl ty in
-   *            if !Clflags.principal then begin
-   *              end_def ();
-   *              generalize_structure ty'
-   *            end;
-   *            let exp =
-   *              Builtin_attributes.warning_scope pvb_attributes
-   *                (fun () -> type_expect exp_env sexp ty')
-   *            in
-   *            end_def ();
-   *            check_univars env true "definition" exp pat.pat_type vars;
-   *            {exp with exp_type = instance env exp.exp_type}
-   *        | _ ->
-   *             Builtin_attributes.warning_scope pvb_attributes (fun () ->
-   *                 type_expect exp_env sexp pat.pat_type))
-   *     spat_sexp_list pat_slot_list in
-   * current_slot := None; *)
+             Builtin_attributes.warning_scope pvb_attributes (fun () ->
+                 type_expect exp_env sexp pat.pat_type))
+      n_spat_sexp_list n_pat_slot_list in
+    match get_type_infer_order () with
+    | LeftToRight -> n_exp_list
+    | RightToLeft -> List.rev n_exp_list
+    | RandomOrder -> unshuffle_list n_exp_list sexp_indices in
+  current_slot := None;
   if is_recursive && not !rec_needed
   && Warnings.is_active Warnings.Unused_rec_flag then begin
     let {pvb_pat; pvb_attributes} = List.hd spat_sexp_list in
