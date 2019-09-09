@@ -610,19 +610,19 @@ let mk_dtypedtree f =
 ;;
 
 let mk_multi_type_errors f =
-  "-multi-type-errors", Arg.Unit f, " Report multiple type errors"
+  "-type-errors", Arg.Unit f, " Report multiple type errors"
 ;;
 
 let mk_type_infer_left_to_right f =
-  "-type-infer-left-to-right", Arg.Unit f, " Type inference left-to-right"
+  "-left-to-right", Arg.Unit f, " Type inference left-to-right"
 ;;
 
 let mk_type_infer_right_to_left f =
-  "-type-infer-right-to-left", Arg.Unit f, " Type inference right-to-left"
+  "-right-to-left", Arg.Unit f, " Type inference right-to-left"
 ;;
 
 let mk_type_infer_random_order f =
-  "-type-infer-random-order", Arg.Unit f, " Type inference in random order"
+  "-random-order", Arg.Unit f, " Type inference in random order"
 ;;
 
 let mk_drawlambda f =
