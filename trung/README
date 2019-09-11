@@ -1,0 +1,14 @@
+- To compile:
+
+    git clone https://github.com/tddsg/ocaml/
+    cd ocaml
+    git fetch
+    git checkout 4.06
+    ./configure
+    make world
+
+- To run OCaml compiler after compilation:
+
+    ./byterun/ocamlrun ./ocamlc -I stdlib ../ocaml/examples/foo.ml
+
+- See more at the RUNTOP environment in the Makefile
