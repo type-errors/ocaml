@@ -259,6 +259,7 @@ let rec add_expr bv exp =
       end
   | Pexp_extension e -> handle_extension e
   | Pexp_unreachable -> ()
+  | Pexp_nil -> ()
 
 and add_cases bv cases =
   List.iter (add_case bv) cases

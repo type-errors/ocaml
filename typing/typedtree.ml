@@ -123,6 +123,7 @@ and expression_desc =
   | Texp_unreachable
   | Texp_extension_constructor of Longident.t loc * Path.t
   | Texp_open of open_declaration * expression
+  | Texp_nil
 
 and meth =
     Tmeth_name of string

@@ -178,11 +178,17 @@ type error =
   | Andop_type_clash of string * Ctype.Unification_trace.t
   | Bindings_type_clash of Ctype.Unification_trace.t
 
+type error_reporting_mode =
+  | SingleError
+  | MultiTypeErrors
+
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
 
 val report_error: Env.t -> formatter -> error -> unit
- (** @deprecated.  Use {!Location.error_of_exn}, {!Location.print_report}. *)
+(* Deprecated.  Use Location.{error_of_exn, report_error}. *)
+
+val already_report_some_type_errors : bool ref
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
 val type_module: (Env.t -> Parsetree.module_expr -> Typedtree.module_expr) ref

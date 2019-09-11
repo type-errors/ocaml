@@ -542,6 +542,8 @@ and transl_exp0 e =
         (transl_letop e.exp_loc e.exp_env let_ ands param body partial)
   | Texp_unreachable ->
       raise (Error (e.exp_loc, Unreachable_reached))
+  | Texp_nil ->
+      raise Location.Already_displayed_error
   | Texp_open (od, e) ->
       let pure = pure_module od.open_expr in
       (* this optimization shouldn't be needed because Simplif would

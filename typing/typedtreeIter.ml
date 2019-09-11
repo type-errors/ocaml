@@ -372,6 +372,8 @@ module MakeIterator(Iter : IteratorArgument) : sig
         | Texp_open (od, e) ->
             iter_module_expr od.open_expr;
             iter_expression e
+        | Texp_nil ->
+            ()
       end;
       Iter.leave_expression exp;
 

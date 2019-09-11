@@ -126,6 +126,10 @@ val unique_ids : bool ref
 val dump_source : bool ref
 val dump_parsetree : bool ref
 val dump_typedtree : bool ref
+val multi_type_errors : bool ref
+val type_infer_left_to_right : bool ref
+val type_infer_right_to_left : bool ref
+val type_infer_random_order : bool ref
 val dump_rawlambda : bool ref
 val dump_lambda : bool ref
 val dump_rawclambda : bool ref

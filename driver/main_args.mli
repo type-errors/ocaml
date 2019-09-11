@@ -56,6 +56,10 @@ module type Common_options = sig
   val _dsource : unit -> unit
   val _dparsetree : unit -> unit
   val _dtypedtree : unit -> unit
+  val _multi_type_errors : unit -> unit
+  val _type_infer_left_to_right : unit -> unit
+  val _type_infer_right_to_left : unit -> unit
+  val _type_infer_random_order : unit -> unit
   val _drawlambda : unit -> unit
   val _dlambda : unit -> unit
 
