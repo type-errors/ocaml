@@ -499,21 +499,18 @@ let get_type_infer_order () =
 let apply_thunk thunk =
   try thunk () with
   | Error (loc, env, error) when error_mode () != SingleError ->
-      let _ = fprintf err_formatter "\n" in
-      (* let _ = Location.print_error err_formatter loc in *)
-      let _ = Location.print_loc err_formatter loc in
-      (* let _ = Location.report_error err_formatter error in *)
-      let _ = fprintf err_formatter " " in
-      let _ = report_error env err_formatter error in
-      let _ = fprintf err_formatter "\n" in
+      let report = Location.error_of_printer ~loc (report_error env) error in
+      let _ = Location.print_report err_formatter report in
+      let _ = Location.echo_eof () in
+      let _ = Location.echo_eof () in
       let _ = already_report_some_type_errors := true in
       mk_ill_typed_exp env loc
   | Typetexp.Error (loc, env, error) when error_mode () != SingleError ->
-      let _ = fprintf err_formatter "\n" in
-      (* let _ = Location.print_error err_formatter loc in *)
-      let _ = fprintf err_formatter " " in
-      let _ = Typetexp.report_error env err_formatter error in
-      let _ = fprintf err_formatter "\n" in
+      let report = Location.error_of_printer ~loc
+                     (Typetexp.report_error env) error in
+      let _ = Location.print_report err_formatter report in
+      let _ = Location.echo_eof () in
+      let _ = Location.echo_eof () in
       let _ = already_report_some_type_errors := true in
       mk_ill_typed_exp env loc
   | Location.Already_displayed_error when error_mode () != SingleError ->
